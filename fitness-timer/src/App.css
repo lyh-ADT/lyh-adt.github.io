@@ -1,0 +1,469 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background: #fafafa;
+  min-height: 100vh;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.app {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  width: 100%;
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-bottom: 80px;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
+}
+
+/* 当前训练区域 */
+.current-workout {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sets-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.sets-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sets-display {
+  font-size: 72px;
+  font-weight: 300;
+  color: #1976d2;
+  line-height: 1;
+}
+
+/* 休息计时器 */
+.rest-timer {
+  background: linear-gradient(135deg, #ef5350 0%, #e53935 100%);
+  border-radius: 8px;
+  padding: 32px 24px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(239, 83, 80, 0.3);
+}
+
+.rest-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.timer-display {
+  font-size: 64px;
+  font-weight: 300;
+  color: white;
+  margin-bottom: 24px;
+  line-height: 1;
+}
+
+/* Material Design 按钮 */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+  cursor: pointer;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn:active {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.26);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #1976d2;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+.btn-primary:active:not(:disabled) {
+  background: #0d47a1;
+}
+
+.btn-secondary {
+  background: white;
+  color: #ef5350;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.btn-secondary:active {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.btn-success {
+  background: #4caf50;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #43a047;
+}
+
+.btn-success:active:not(:disabled) {
+  background: #388e3c;
+}
+
+.btn-large {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 15px;
+}
+
+.btn-text {
+  background: transparent;
+  border: none;
+  color: #1976d2;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.75px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-text:hover {
+  background: rgba(25, 118, 210, 0.08);
+}
+
+.btn-text:active {
+  background: rgba(25, 118, 210, 0.16);
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  color: rgba(0, 0, 0, 0.54);
+  font-size: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.btn-icon:active {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* 当前训练休息记录 */
+.current-rests {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.current-rests-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.current-rests-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rest-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 抽屉触发按钮 */
+.drawer-trigger {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border: none;
+  border-radius: 0;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+  transition: background-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 999;
+}
+
+.drawer-trigger:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.drawer-trigger:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.drawer-icon {
+  transition: transform 0.3s ease;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.drawer-icon.open {
+  transform: rotate(180deg);
+}
+
+/* 抽屉 */
+.drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.drawer.open {
+  transform: translateY(0);
+}
+
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 8px 16px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+}
+
+.drawer-title {
+  font-size: 20px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.empty-message {
+  text-align: center;
+  color: rgba(0, 0, 0, 0.38);
+  padding: 48px 16px;
+  font-size: 14px;
+}
+
+.workout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workout-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  gap: 12px;
+}
+
+.workout-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.workout-sets {
+  font-size: 18px;
+  font-weight: 500;
+  color: #1976d2;
+}
+
+.workout-date {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.workout-rests {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.workout-rests-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.6);
+  font-weight: 500;
+}
+
+.rest-time {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: white;
+  color: rgba(0, 0, 0, 0.87);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* 响应式设计 */
+@media (min-width: 600px) {
+  .container {
+    padding: 24px;
+    padding-bottom: 80px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .current-workout,
+  .current-rests {
+    padding: 24px;
+  }
+
+  .drawer-trigger {
+    max-width: 600px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 0;
+  }
+
+  .drawer-content {
+    padding: 24px;
+  }
+}
+
+@media (min-width: 960px) {
+  .container {
+    max-width: 800px;
+  }
+
+  .drawer-trigger {
+    max-width: 800px;
+  }
+}
+
+/* 防止双击缩放 */
+button, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* 滚动条样式 */
+.drawer-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.drawer-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.drawer-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.drawer-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}

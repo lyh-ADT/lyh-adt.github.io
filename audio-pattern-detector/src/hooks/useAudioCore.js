@@ -244,7 +244,7 @@ export function useMatchDetection(refs, config, audioState, onMatch) {
       inputBufferRef.current.length - referenceAudioRef.current.length
     )
 
-    // 检查音频能量
+    // 检查音频能量（更严格的阈值）
     let currentEnergy = 0
     for (let i = 0; i < recentAudio.length; i++) {
       currentEnergy += recentAudio[i] * recentAudio[i]
@@ -255,14 +255,20 @@ export function useMatchDetection(refs, config, audioState, onMatch) {
       refEnergy += referenceAudioRef.current[i] * referenceAudioRef.current[i]
     }
 
-    if (currentEnergy < refEnergy * 0.1) return
+    // 能量必须在参考音频的 30%-300% 之间，避免误触发
+    if (currentEnergy < refEnergy * 0.3 || currentEnergy > refEnergy * 3) return
 
     // 计算匹配分数
     const currentFingerprint = AudioUtils.getAudioFingerprint(new Float32Array(recentAudio))
     const fingerprintScore = AudioUtils.compareFingerprints(referenceFingerprintRef.current, currentFingerprint)
     const currentAvgFFT = AudioUtils.computeAverageFFT(new Float32Array(recentAudio))
     const spectralCorrelation = AudioUtils.computeSpectralCorrelation(referenceFFTRef.current, currentAvgFFT)
-    const combinedScore = fingerprintScore * 0.7 + spectralCorrelation * 0.3
+
+    // 添加时域相关性检查
+    const timeDomainCorrelation = AudioUtils.computeTimeDomainCorrelation(referenceAudioRef.current, new Float32Array(recentAudio))
+
+    // 更严格的综合评分：指纹 50%，频谱 30%，时域 20%
+    const combinedScore = fingerprintScore * 0.5 + spectralCorrelation * 0.3 + timeDomainCorrelation * 0.2
 
     setCurrentMatch(combinedScore.toFixed(2))
 

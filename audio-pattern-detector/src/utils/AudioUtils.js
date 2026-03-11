@@ -74,7 +74,7 @@ class AudioUtils {
     return spectrum
   }
 
-  // 计算频谱相关性
+  // 计算频谱相关性（增强版 - 只关注显著频率）
   static computeSpectralCorrelation(ref, curr) {
     let sumRef = 0
     let sumCurr = 0
@@ -82,29 +82,42 @@ class AudioUtils {
     let sumRefSq = 0
     let sumCurrSq = 0
 
-    const N = Math.min(ref.length, curr.length)
-    if (N === 0) return 0.5
+    // 只使用中高频段（避开低频噪声）
+    const sampleRate = 44100
+    const minFreqBin = Math.floor(100 / sampleRate * 4096)  // ~100Hz
+    const maxFreqBin = Math.floor(8000 / sampleRate * 4096) // ~8000Hz
 
-    for (let i = 0; i < N; i++) {
+    const N = Math.min(ref.length, curr.length, maxFreqBin)
+    if (N <= minFreqBin) return 0
+
+    let validBins = 0
+    for (let i = minFreqBin; i < N; i++) {
+      // 只处理有显著能量的频率
+      if (ref[i] < 0.001 && curr[i] < 0.001) continue
+
       sumRef += ref[i]
       sumCurr += curr[i]
       sumProduct += ref[i] * curr[i]
       sumRefSq += ref[i] * ref[i]
       sumCurrSq += curr[i] * curr[i]
+      validBins++
     }
 
-    const numerator = sumProduct - (sumRef * sumCurr) / N
+    if (validBins < 5) return 0  // 有效频段太少
+
+    const numerator = sumProduct - (sumRef * sumCurr) / validBins
     const denominator = Math.sqrt(
-      (sumRefSq - sumRef * sumRef / N) *
-      (sumCurrSq - sumCurr * sumCurr / N)
+      (sumRefSq - sumRef * sumRef / validBins) *
+      (sumCurrSq - sumCurr * sumCurr / validBins)
     )
 
-    if (denominator === 0 || !isFinite(denominator)) return 0.5
+    if (denominator === 0 || !isFinite(denominator)) return 0
 
     const correlation = numerator / denominator
     // 处理 NaN 和 Infinity
-    if (!isFinite(correlation)) return 0.5
-    return Math.max(0, Math.min(1, (correlation + 1) / 2))
+    if (!isFinite(correlation)) return 0
+    // 更严格的映射：只接受强正相关
+    return Math.max(0, Math.min(1, (correlation + 0.3) / 1.3))
   }
 
   // 计算时域相关性
@@ -126,16 +139,19 @@ class AudioUtils {
     return Math.max(0, Math.min(1, (sum / denominator + 1) / 2))
   }
 
-  // 提取音频指纹（使用能量谱，对数频率分段）
-  static getAudioFingerprint(audioData, bins = 32) {
+  // 提取音频指纹（使用能量谱，对数频率分段，增加 bin 数提高精度）
+  static getAudioFingerprint(audioData, bins = 64) {
     const avgFFT = this.computeAverageFFT(audioData, 4096, 2048)
     const fingerprint = new Float32Array(bins)
     const fftLength = avgFFT.length
 
-    // 按对数频率分段
+    // 按对数频率分段（更精确的分段，跳过直流分量）
+    const minFreqBin = 2  // 跳过直流和极低频
     for (let i = 0; i < bins; i++) {
-      const startBin = Math.floor((Math.pow(2, i / bins) - 1) / (Math.pow(2, 1 / bins) - 1))
-      const endBin = Math.floor((Math.pow(2, (i + 1) / bins) - 1) / (Math.pow(2, 1 / bins) - 1))
+      const ratio = i / bins
+      // 使用平方分布，更关注中高频
+      const startBin = Math.floor(minFreqBin + ratio * ratio * (fftLength - minFreqBin))
+      const endBin = Math.floor(minFreqBin + ((i + 1) / bins) * ((i + 1) / bins) * (fftLength - minFreqBin))
 
       let sum = 0
       let count = 0
@@ -160,23 +176,22 @@ class AudioUtils {
     return fingerprint
   }
 
-  // 比较指纹相似度
+  // 比较指纹相似度（更严格 - 使用均方根误差）
   static compareFingerprints(fp1, fp2) {
     const N = Math.min(fp1.length, fp2.length)
-    if (N === 0) return 0.5
+    if (N === 0) return 0
 
-    let sum = 0
+    let sumSquaredDiff = 0
     for (let i = 0; i < N; i++) {
-      const diff = Math.abs(fp1[i] - fp2[i])
-      // 处理 NaN
-      if (!isFinite(diff)) {
-        sum += 0
-      } else {
-        sum += 1 - Math.min(1, diff)
-      }
+      const diff = fp1[i] - fp2[i]
+      sumSquaredDiff += diff * diff
     }
-    const result = sum / N
-    return isFinite(result) ? result : 0.5
+
+    // 使用均方根误差，转换为相似度
+    const rms = Math.sqrt(sumSquaredDiff / N)
+    // RMS 为 0 时相似度为 1，RMS 为 0.5 时相似度约为 0.25
+    const similarity = Math.max(0, 1 - rms * 2)
+    return similarity
   }
 
   // 计算频谱距离

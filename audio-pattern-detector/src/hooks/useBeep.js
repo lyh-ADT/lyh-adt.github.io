@@ -29,7 +29,7 @@ export function useBeep(enabled = true) {
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1)
         oscillator.stop(audioContext.currentTime + 0.1)
         setTimeout(() => audioContext.close(), 100)
-      }, 800)
+      }, 500)
     } catch (err) {
       console.error('播放蜂鸣器失败:', err)
     }

@@ -117,36 +117,6 @@ export function useAudioConfig(initialConfig = {}) {
 }
 
 /**
- * 蜂鸣器 Hook
- */
-export function useBeep(beepEnabled) {
-  return useCallback(() => {
-    if (!beepEnabled) return
-
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-      oscillator.type = 'square'
-      oscillator.frequency.value = 1000
-      gainNode.gain.setValueAtTime(0.8, audioContext.currentTime)
-      oscillator.start(audioContext.currentTime)
-
-      setTimeout(() => {
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1)
-        oscillator.stop(audioContext.currentTime + 0.1)
-        setTimeout(() => audioContext.close(), 100)
-      }, 800)
-    } catch (err) {
-      console.error('播放蜂鸣器失败:', err)
-    }
-  }, [beepEnabled])
-}
-
-/**
  * 音频录制操作 Hook
  */
 export function useRecordingActions(state, refs, config, updateStatus) {

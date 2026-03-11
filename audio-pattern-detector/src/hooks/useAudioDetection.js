@@ -82,13 +82,15 @@ export function useAudioDetection(initialConfig = {}) {
   // 自动重启逻辑 - 当达到匹配上限时
   useEffect(() => {
     if (audioState.matchCount >= (config.autoRestartLimit || 3)) {
+      // 同时重置 ref 和 state 的 matchCount
       refs.matchCountRef.current = 0
+      audioState.setMatchCount(0)
       stopListening(true)
       setTimeout(() => {
         startListeningWithRandomDelay()
       }, 500)
     }
-  }, [audioState.matchCount, config.autoRestartLimit, stopListening, startListeningWithRandomDelay, refs.matchCountRef])
+  }, [audioState.matchCount, config.autoRestartLimit, stopListening, startListeningWithRandomDelay, refs.matchCountRef, audioState.setMatchCount])
 
   // 录制倒计时逻辑
   useEffect(() => {

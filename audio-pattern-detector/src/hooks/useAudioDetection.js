@@ -3,7 +3,7 @@
  * 组合核心音频 Hook 与 beep、随机延迟功能
  */
 
-import { useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   AppState,
   useAudioCoreState,

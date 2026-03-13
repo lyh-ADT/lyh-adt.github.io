@@ -34,7 +34,12 @@ function AudioDetector() {
     startListeningWithRandomDelay,
     getStatusInfo,
     analyserRef
-  } = useAudioDetection()
+  } = useAudioDetection({
+    recordDuration,
+    threshold,
+    beepEnabled,
+    autoRestartLimit
+  })
 
   // 绘制频谱
   const drawFrequencyData = useCallback((dataArray) => {

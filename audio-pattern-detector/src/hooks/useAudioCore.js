@@ -100,6 +100,8 @@ export function useAudioCoreConfig(initialConfig = {}) {
   const [config] = useState({
     recordDuration: initialConfig.recordDuration || 5,
     threshold: initialConfig.threshold || 0.6,
+    beepEnabled: initialConfig.beepEnabled ?? true,
+    autoRestartLimit: initialConfig.autoRestartLimit || 3,
     matchCooldown: 800
   })
 

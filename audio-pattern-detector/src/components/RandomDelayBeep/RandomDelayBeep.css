@@ -130,6 +130,16 @@
   color: #667eea;
 }
 
+.status-countdown {
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 152, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-left: 10px;
+  font-weight: 500;
+}
+
 .status-card.timing .timer-display {
   color: #667eea;
 }
@@ -263,7 +273,7 @@
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 15px;
 }
 

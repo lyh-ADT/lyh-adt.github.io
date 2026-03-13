@@ -23,13 +23,20 @@ function RandomDelayBeep() {
   const [history, setHistory] = useState([])
   const [beepEnabled, setBeepEnabled] = useState(true)
 
+  // Par Time 设置
+  const [parTime, setParTime] = useState(30)
+  const [parTimeEnabled, setParTimeEnabled] = useState(false)
+  const [parTimeRemaining, setParTimeRemaining] = useState(null)
+
   // 计时器状态
   const [isTiming, setIsTiming] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [lastElapsedTime, setLastElapsedTime] = useState(null)
 
   const timerRef = useRef(null)
+  const parTimeTimerRef = useRef(null)
   const startTimeRef = useRef(0)
+  const parTimeStartTimeRef = useRef(0)
 
   // 使用蜂鸣器 Hook
   const playBeep = useBeep(beepEnabled)
@@ -68,6 +75,57 @@ function RandomDelayBeep() {
       }
     }
   }, [isTiming, elapsedTime])
+
+  // Par Time 计时器逻辑
+  useEffect(() => {
+    if (parTimeEnabled && parTime && isTiming) {
+      const duration = parTime
+      parTimeStartTimeRef.current = Date.now()
+      setParTimeRemaining(parTime)
+
+      const updateParTimeCountdown = () => {
+        const elapsed = Date.now() - parTimeStartTimeRef.current
+        const remaining = Math.max(0, Math.floor(duration - elapsed))
+        setParTimeRemaining(remaining)
+
+        if (elapsed >= duration) {
+          // 到达 par time，停止计时并发出提示音
+          setParTimeRemaining(null)
+          if (beepEnabled) {
+            playBeep()
+          }
+          // 保存当前计时结果并停止
+          const finalTime = Date.now() - startTimeRef.current
+          const now = new Date()
+          const timeStr = now.toLocaleTimeString()
+
+          setHistory(prev => [{
+            time: timeStr,
+            delay: delayMs / 1000,
+            elapsed: finalTime,
+            id: Date.now(),
+            timeout: true
+          }, ...prev.slice(0, 19)])
+
+          setLastElapsedTime(finalTime)
+          setIsTiming(false)
+          setElapsedTime(0)
+        } else if (isTiming) {
+          parTimeTimerRef.current = requestAnimationFrame(updateParTimeCountdown)
+        }
+      }
+
+      updateParTimeCountdown()
+
+      return () => {
+        if (parTimeTimerRef.current) {
+          cancelAnimationFrame(parTimeTimerRef.current)
+        }
+      }
+    } else if (!isTiming) {
+      setParTimeRemaining(null)
+    }
+  }, [parTimeEnabled, parTime, isTiming, beepEnabled, playBeep, delayMs])
 
   // 处理开始
   const handleStart = useCallback(() => {
@@ -128,6 +186,9 @@ function RandomDelayBeep() {
               <>
                 <span className="status-indicator timing-icon">⏱️</span>
                 <span className="status-text timer-display">{formatTime(elapsedTime)}</span>
+                {parTimeEnabled && parTimeRemaining !== null && (
+                  <span className="status-countdown">Par Time: {parTimeRemaining}ms</span>
+                )}
               </>
             ) : lastElapsedTime !== null ? (
               <>
@@ -227,6 +288,31 @@ function RandomDelayBeep() {
               disabled={isWaiting || isTiming}
             />
           </div>
+
+          <div className="setting-item">
+            <label htmlFor="parTimeToggle">启用 Par Time</label>
+            <input
+              id="parTimeToggle"
+              type="checkbox"
+              checked={parTimeEnabled}
+              onChange={(e) => setParTimeEnabled(e.target.checked)}
+              disabled={isWaiting || isTiming}
+            />
+          </div>
+
+          <div className="setting-item">
+            <label htmlFor="parTime">Par Time（毫秒）</label>
+            <input
+              id="parTime"
+              type="number"
+              min="100"
+              max="60000"
+              step="100"
+              value={parTime}
+              onChange={(e) => setParTime(Math.max(100, Math.min(60000, parseInt(e.target.value) || parTime)))}
+              disabled={isWaiting || isTiming || !parTimeEnabled}
+            />
+          </div>
         </div>
 
         {/* 统计 */}
@@ -240,6 +326,12 @@ function RandomDelayBeep() {
               <span className="stat-label">当前延迟范围</span>
               <span className="stat-value">{minDelay}s - {maxDelay}s</span>
             </div>
+            {parTimeEnabled && (
+              <div className="stat-item">
+                <span className="stat-label">Par Time</span>
+                <span className="stat-value">{parTime}ms</span>
+              </div>
+            )}
           </div>
         </div>
 

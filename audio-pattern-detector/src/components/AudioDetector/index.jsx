@@ -1,5 +1,3 @@
-import React from 'react'
-
 /**
  * 状态栏组件
  */
@@ -71,7 +69,12 @@ export function MatchHistoryCard({ matchHistory }) {
           matchHistory.map((match, index) => (
             <div key={match.id} className="match-item">
               <span className="match-number">#{matchHistory.length - index}</span>
-              <span className="match-interval">{match.shotNumber === 1 ? '开始' : `+${match.timeSinceLastMatch}ms`}</span>
+              <span className="match-interval">
+                {match.totalTime
+                  ? `总时间：${match.timeSinceStart}ms`
+                  : (match.shotNumber === 1 ? '开始' : `+${match.timeSinceLastMatch}ms`)
+                }
+              </span>
               <span className="match-time">{match.time}</span>
             </div>
           ))
@@ -136,13 +139,13 @@ export function SliderSetting({ value, onChange, min, max, step = 1, formatValue
 /**
  * 开关设置
  */
-export function ToggleSetting({ checked, onChange, labels }) {
+export function ToggleSetting({ checked, onChecked, labels }) {
   return (
     <label className="toggle-switch">
       <input
         type="checkbox"
         checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={(e) => onChecked(e.target.checked)}
       />
       <span className="toggle-slider"></span>
       <span className="toggle-label">{checked ? labels[0] : labels[1]}</span>
@@ -167,7 +170,11 @@ export function SettingsCard({
   autoRestartEnabled,
   setAutoRestartEnabled,
   autoRestartLimit,
-  setAutoRestartLimit
+  setAutoRestartLimit,
+  parTimeEnabled,
+  setParTimeEnabled,
+  parTime,
+  setParTime
 }) {
   return (
     <div className="settings-card">
@@ -204,7 +211,7 @@ export function SettingsCard({
         <SettingRow label="启动提示音">
           <ToggleSetting
             checked={beepEnabled}
-            onChange={setBeepEnabled}
+            onChecked={setBeepEnabled}
             labels={['开', '关']}
           />
         </SettingRow>
@@ -212,7 +219,7 @@ export function SettingsCard({
         <SettingRow label="枪声提示音">
           <ToggleSetting
             checked={shotBeepEnabled}
-            onChange={setShotBeepEnabled}
+            onChecked={setShotBeepEnabled}
             labels={['开', '关']}
           />
         </SettingRow>
@@ -220,7 +227,7 @@ export function SettingsCard({
         <SettingRow label="自动重启">
           <ToggleSetting
             checked={autoRestartEnabled}
-            onChange={setAutoRestartEnabled}
+            onChecked={setAutoRestartEnabled}
             labels={['开', '关']}
           />
         </SettingRow>
@@ -232,6 +239,24 @@ export function SettingsCard({
             min={1}
             max={100}
             unit="发"
+          />
+        </SettingRow>
+
+        <SettingRow label="启用 Par Time">
+          <ToggleSetting
+            checked={parTimeEnabled}
+            onChecked={setParTimeEnabled}
+            labels={['开', '关']}
+          />
+        </SettingRow>
+
+        <SettingRow label="Par Time（毫秒）">
+          <NumberSetting
+            value={parTime}
+            onChange={setParTime}
+            min={100}
+            max={60000}
+            unit="ms"
           />
         </SettingRow>
       </div>

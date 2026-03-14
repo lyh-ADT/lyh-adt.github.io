@@ -19,6 +19,8 @@ function AudioDetector() {
   const [shotBeepEnabled, setShotBeepEnabled] = useState(true)
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
   const [autoRestartLimit, setAutoRestartLimit] = useState(5)
+  const [parTimeEnabled, setParTimeEnabled] = useState(false)
+  const [parTime, setParTime] = useState(30)
 
   const canvasRef = useRef(null)
   const visualizerFrameRef = useRef(null)
@@ -35,7 +37,9 @@ function AudioDetector() {
     toggleListening,
     startListeningWithRandomDelay,
     getStatusInfo,
-    analyserRef
+    analyserRef,
+    elapsedTime,
+    parTimeRemaining
   } = useAudioDetection({
     threshold,
     beepEnabled,
@@ -43,7 +47,9 @@ function AudioDetector() {
     autoRestartEnabled,
     autoRestartLimit,
     minDelay,
-    maxDelay
+    maxDelay,
+    parTimeEnabled,
+    parTime
   })
 
   // 绘制频谱
@@ -138,6 +144,18 @@ function AudioDetector() {
     ? { indicator: 'waiting', text: `等待中... 剩余 ${randomDelayCountdown.toFixed(1)} 秒` }
     : statusInfo
 
+  // 格式化时间为 HH:MM:SS.sss
+  const formatTime = (ms) => {
+    if (ms === null || ms === undefined) return '--:--:--.---'
+    const totalSeconds = Math.floor(ms / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    const milliseconds = ms % 1000
+    const pad = (num, len = 2) => String(num).padStart(len, '0')
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(milliseconds, 3)}`
+  }
+
   return (
     <div className="app-layout">
       <div className={`container ${isWaitingForRandomDelay ? 'waiting' : ''}`}>
@@ -145,6 +163,15 @@ function AudioDetector() {
         <p className="subtitle">随机延迟后发出提示音，检测枪声并记录射击间隔时间</p>
 
         <StatusBar indicator={displayStatus.indicator} text={displayStatus.text} />
+
+        {/* 计时器显示 */}
+        <div className="timer-display-card">
+          <span className="timer-label">计时</span>
+          <span className="timer-value">{formatTime(elapsedTime)}</span>
+          {parTimeEnabled && parTimeRemaining !== null && elapsedTime > 0 && (
+            <span className="par-time-remaining">Par Time: {parTimeRemaining}ms</span>
+          )}
+        </div>
 
         <div className="controls">
           <ControlButton
@@ -183,6 +210,10 @@ function AudioDetector() {
         setAutoRestartEnabled={setAutoRestartEnabled}
         autoRestartLimit={autoRestartLimit}
         setAutoRestartLimit={setAutoRestartLimit}
+        parTimeEnabled={parTimeEnabled}
+        setParTimeEnabled={setParTimeEnabled}
+        parTime={parTime}
+        setParTime={setParTime}
       />
     </div>
   )

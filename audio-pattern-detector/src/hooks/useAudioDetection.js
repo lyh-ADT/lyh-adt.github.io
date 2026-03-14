@@ -37,6 +37,8 @@ export function useAudioDetection(initialConfig = {}) {
     autoRestartLimit: configRef.current.autoRestartLimit || 5,
     minDelay: configRef.current.minDelay || 1,
     maxDelay: configRef.current.maxDelay || 5,
+    parTimeEnabled: configRef.current.parTimeEnabled ?? false,
+    parTime: configRef.current.parTime || 30,
     matchCooldown: 100
   }
 
@@ -78,7 +80,7 @@ export function useAudioDetection(initialConfig = {}) {
     startDelay: startRandomDelayInternal,
     cancelDelay: cancelDelayInternal
   } = useRandomDelayAction(() => {
-    // 随机延迟完成，播放 Beep 并开始监听
+    // 随机延迟完成，播放 Beep 并开始监听和计时
     playBeep()
     startListening()
   }, {
@@ -98,6 +100,110 @@ export function useAudioDetection(initialConfig = {}) {
     audioState.setCurrentShotTime(0)
     startRandomDelayRef.current()
   }, [audioState])
+
+  // 计时器状态
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const [parTimeRemaining, setParTimeRemaining] = useState(null)
+  const timerRef = useRef(null)
+  const parTimeTimerRef = useRef(null)
+  const startTimeRef = useRef(0)
+  const parTimeStartTimeRef = useRef(0)
+  const listeningStateRef = useRef(false)
+  const hasRecordedFinalTimeRef = useRef(false)
+
+  // 计时器更新
+  useEffect(() => {
+    const isListening = audioState.state === AppState.LISTENING || audioState.state === AppState.TIMING
+
+    if (isListening && !listeningStateRef.current) {
+      // 刚开始监听，重置 startTime
+      startTimeRef.current = Date.now()
+      setElapsedTime(0)
+      hasRecordedFinalTimeRef.current = false
+    }
+    listeningStateRef.current = isListening
+
+    if (isListening) {
+      const animate = () => {
+        setElapsedTime(Date.now() - startTimeRef.current)
+        timerRef.current = requestAnimationFrame(animate)
+      }
+      timerRef.current = requestAnimationFrame(animate)
+    }
+
+    return () => {
+      if (timerRef.current) {
+        cancelAnimationFrame(timerRef.current)
+      }
+    }
+  }, [audioState.state])
+
+  // Par Time 计时器逻辑
+  const parTimeEnabledRef = useRef(false)
+  useEffect(() => {
+    const isListening = audioState.state === AppState.LISTENING || audioState.state === AppState.TIMING
+
+    if (config.parTimeEnabled && config.parTime && isListening) {
+      // 只在刚开始监听时设置 Par Time 开始时间
+      if (!parTimeEnabledRef.current) {
+        parTimeEnabledRef.current = true
+        parTimeStartTimeRef.current = Date.now()
+        setParTimeRemaining(config.parTime)
+      }
+
+      const updateParTimeCountdown = () => {
+        const elapsed = Date.now() - parTimeStartTimeRef.current
+        const remaining = Math.max(0, Math.floor(config.parTime - elapsed))
+        setParTimeRemaining(remaining)
+
+        if (elapsed >= config.parTime) {
+          // 到达 par time，停止计时并发出提示音
+          setParTimeRemaining(null)
+          if (config.beepEnabled) {
+            playBeep()
+          }
+          // 保存当前计时结果并停止
+          const finalTime = Date.now() - startTimeRef.current
+          const now = new Date()
+          const timeStr = now.toLocaleTimeString()
+
+          audioState.setShotHistory(prev => [{
+            time: timeStr,
+            id: Date.now(),
+            timeSinceStart: finalTime,
+            timeSinceLastMatch: finalTime,
+            shotNumber: audioState.shotCount + 1,
+            timeout: true,
+            totalTime: true
+          }, ...prev.slice(0, 18)])
+
+          setElapsedTime(0)
+          stopListening()
+          parTimeEnabledRef.current = false
+        } else {
+          parTimeTimerRef.current = requestAnimationFrame(updateParTimeCountdown)
+        }
+      }
+
+      updateParTimeCountdown()
+
+      return () => {
+        if (parTimeTimerRef.current) {
+          cancelAnimationFrame(parTimeTimerRef.current)
+        }
+      }
+    } else if (!isListening) {
+      setParTimeRemaining(null)
+      parTimeEnabledRef.current = false
+    }
+  }, [config.parTimeEnabled, config.parTime, audioState.state, config.beepEnabled, playBeep, stopListening, audioState])
+
+  // 开始监听时启动计时器
+  const startListeningWithTimer = useCallback(() => {
+    startTimeRef.current = Date.now()
+    setElapsedTime(0)
+    startListening()
+  }, [startListening])
 
   // 自动重启逻辑 - 使用 shotCountRef 来检测
   const autoRestartCheckedRef = useRef(false)
@@ -124,6 +230,8 @@ export function useAudioDetection(initialConfig = {}) {
       // 1 秒后随机延迟重启
       setTimeout(() => {
         console.log('开始随机延迟重启')
+        startTimeRef.current = Date.now()
+        setElapsedTime(0)
         if (startRandomDelayRef.current) {
           startRandomDelayRef.current()
         }
@@ -137,12 +245,27 @@ export function useAudioDetection(initialConfig = {}) {
   // 重写 toggle 函数
   const handleToggleListening = () => {
     if (audioState.stateRef.current === AppState.LISTENING || audioState.stateRef.current === AppState.DETECTED || audioState.stateRef.current === AppState.TIMING) {
+      // 停止时保存最终时间到历史记录
+      if (elapsedTime > 0) {
+        const now = new Date()
+        const timeStr = now.toLocaleTimeString()
+
+        audioState.setShotHistory(prev => [{
+          time: timeStr,
+          id: Date.now(),
+          timeSinceStart: elapsedTime,
+          timeSinceLastMatch: elapsedTime,
+          shotNumber: audioState.shotCount + 1,
+          totalTime: true
+        }, ...prev.slice(0, 18)])
+      }
+
       stopListening()
       if (isWaitingForRandomDelay && cancelDelayRef.current) {
         cancelDelayRef.current()
       }
     } else {
-      startListening()
+      startListeningWithTimer()
     }
   }
 
@@ -155,6 +278,8 @@ export function useAudioDetection(initialConfig = {}) {
     countdown: audioState.countdown,
     randomDelayCountdown,
     isWaitingForRandomDelay,
+    elapsedTime,
+    parTimeRemaining,
 
     // 操作函数
     startListening,

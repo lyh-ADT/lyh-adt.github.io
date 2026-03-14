@@ -72,7 +72,7 @@ export function MatchHistoryCard({ matchHistory }) {
               <span className="match-interval">
                 {match.totalTime
                   ? `总时间：${match.timeSinceStart}ms`
-                  : (match.shotNumber === 1 ? '开始' : `+${match.timeSinceLastMatch}ms`)
+                  : `+${match.timeSinceLastMatch}ms`
                 }
               </span>
               <span className="match-time">{match.time}</span>

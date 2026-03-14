@@ -42,8 +42,6 @@ export function useAudioDetection(initialConfig = {}) {
     matchCooldown: 100
   }
 
-  console.log('useAudioDetection config:', config)
-
   const audioState = useAudioState()
   const refs = useAudioRefsWithExtensions()
   const playBeep = useBeep(config.beepEnabled ?? true)
@@ -212,10 +210,7 @@ export function useAudioDetection(initialConfig = {}) {
     const currentCount = refs.shotCountRef.current
     const limit = config.autoRestartLimit || 5
 
-    console.log('检查自动重启：currentCount =', currentCount, 'limit =', limit, 'enabled =', config.autoRestartEnabled)
-
     if (config.autoRestartEnabled && currentCount >= limit && !autoRestartCheckedRef.current) {
-      console.log('触发自动重启')
       autoRestartCheckedRef.current = true
 
       // 重置计数
@@ -229,7 +224,6 @@ export function useAudioDetection(initialConfig = {}) {
 
       // 1 秒后随机延迟重启
       setTimeout(() => {
-        console.log('开始随机延迟重启')
         startTimeRef.current = Date.now()
         setElapsedTime(0)
         if (startRandomDelayRef.current) {

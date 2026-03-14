@@ -20,7 +20,7 @@ function AudioDetector() {
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
   const [autoRestartLimit, setAutoRestartLimit] = useState(5)
   const [parTimeEnabled, setParTimeEnabled] = useState(false)
-  const [parTime, setParTime] = useState(30)
+  const [parTime, setParTime] = useState(1000)
 
   const canvasRef = useRef(null)
   const visualizerFrameRef = useRef(null)

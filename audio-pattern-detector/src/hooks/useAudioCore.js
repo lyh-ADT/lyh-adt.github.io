@@ -544,8 +544,8 @@ export function useListeningActionsForShot(refs, config, audioState, detectShot)
 
     scriptProcessor.onaudioprocess = (e) => {
       if (!isListeningRef.current ||
-          (stateRef.current !== AppState.LISTENING && stateRef.current !== AppState.TIMING) ||
-          isDetectingRef.current) return
+        (stateRef.current !== AppState.LISTENING && stateRef.current !== AppState.TIMING) ||
+        isDetectingRef.current) return
 
       const inputData = e.inputBuffer.getChannelData(0)
       inputBufferRef.current.push(...inputData)
@@ -669,9 +669,9 @@ export function useShotDetection(refs, config, audioState, playBeep) {
     // 枪声检测：能量超过阈值
     // 阈值根据用户设置调整，0.6 阈值对应约 0.02 RMS
     const baseThreshold = 0.01 // 基础环境噪音阈值
-    const userThreshold = config.threshold || 0.6
-    // 阈值映射：用户设置 0-1 -> 实际阈值 0.01-0.1
-    const energyThreshold = baseThreshold + (userThreshold * 0.09)
+    const userThreshold = config.threshold || 0.7
+    // 阈值映射：用户设置 0-1 -> 实际阈值 0.01-0.3
+    const energyThreshold = baseThreshold + (userThreshold * 0.29)
 
     if (currentEnergy > energyThreshold) {
       // 检测到枪声

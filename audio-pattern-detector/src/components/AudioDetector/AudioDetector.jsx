@@ -14,7 +14,7 @@ function AudioDetector() {
   // 本地设置状态
   const [minDelay, setMinDelay] = useState(1)
   const [maxDelay, setMaxDelay] = useState(5)
-  const [threshold, setThreshold] = useState(0.6)
+  const [threshold, setThreshold] = useState(0.7)
   const [beepEnabled, setBeepEnabled] = useState(true)
   const [shotBeepEnabled, setShotBeepEnabled] = useState(true)
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)

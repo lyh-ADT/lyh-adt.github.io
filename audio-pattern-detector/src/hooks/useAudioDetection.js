@@ -8,7 +8,6 @@ import {
   AppState,
   useAudioCoreState,
   useAudioCoreRefs,
-  useAudioCoreConfig,
   useShotDetection,
   useListeningActionsForShot,
   useStatusInfo,
@@ -25,14 +24,31 @@ export { AppState }
  * @returns {Object} Shot Timer 的状态和方法
  */
 export function useAudioDetection(initialConfig = {}) {
-  // 使用核心音频 Hook
-  const config = useAudioCoreConfig(initialConfig)
+  // 使用 refs 存储动态配置，避免每次渲染创建新对象
+  const configRef = useRef(initialConfig)
+  configRef.current = initialConfig
+
+  const config = {
+    recordDuration: configRef.current.recordDuration || 3,
+    threshold: configRef.current.threshold || 0.6,
+    beepEnabled: configRef.current.beepEnabled ?? true,
+    shotBeepEnabled: configRef.current.shotBeepEnabled ?? true,
+    autoRestartEnabled: configRef.current.autoRestartEnabled ?? false,
+    autoRestartLimit: configRef.current.autoRestartLimit || 5,
+    minDelay: configRef.current.minDelay || 1,
+    maxDelay: configRef.current.maxDelay || 5,
+    matchCooldown: 100
+  }
+
+  console.log('useAudioDetection config:', config)
+
   const audioState = useAudioState()
   const refs = useAudioRefsWithExtensions()
   const playBeep = useBeep(config.beepEnabled ?? true)
+  const playShotBeep = useBeep(config.shotBeepEnabled ?? true)
 
   // 创建枪声检测 Hook
-  const { detectShot } = useShotDetection(refs, config, audioState, playBeep)
+  const { detectShot } = useShotDetection(refs, config, audioState, playShotBeep)
 
   // 创建监听操作 Hook（Shot Timer 专用）
   const {
@@ -52,11 +68,15 @@ export function useAudioDetection(initialConfig = {}) {
   minDelayRef.current = config.minDelay || 1
   maxDelayRef.current = config.maxDelay || 5
 
+  // 使用 ref 存储 startRandomDelay，避免依赖变化
+  const startRandomDelayRef = useRef(null)
+  const cancelDelayRef = useRef(null)
+
   const {
     isWaiting: isWaitingForRandomDelay,
     countdown: randomDelayCountdown,
-    startDelay: startRandomDelay,
-    cancelDelay
+    startDelay: startRandomDelayInternal,
+    cancelDelay: cancelDelayInternal
   } = useRandomDelayAction(() => {
     // 随机延迟完成，播放 Beep 并开始监听
     playBeep()
@@ -66,21 +86,60 @@ export function useAudioDetection(initialConfig = {}) {
     maxDelay: maxDelayRef.current * 1000
   })
 
+  // 保存函数到 ref
+  startRandomDelayRef.current = startRandomDelayInternal
+  cancelDelayRef.current = cancelDelayInternal
+
   // 开始随机延迟监听
   const startListeningWithRandomDelay = useCallback(() => {
     // 清除上次的计时结果
     audioState.setShotCount(0)
     audioState.setShotHistory([])
     audioState.setCurrentShotTime(0)
-    startRandomDelay()
-  }, [audioState, startRandomDelay])
+    startRandomDelayRef.current()
+  }, [audioState])
+
+  // 自动重启逻辑 - 使用 shotCountRef 来检测
+  const autoRestartCheckedRef = useRef(false)
+  useEffect(() => {
+    // 只在射击状态变化时检查
+    const currentCount = refs.shotCountRef.current
+    const limit = config.autoRestartLimit || 5
+
+    console.log('检查自动重启：currentCount =', currentCount, 'limit =', limit, 'enabled =', config.autoRestartEnabled)
+
+    if (config.autoRestartEnabled && currentCount >= limit && !autoRestartCheckedRef.current) {
+      console.log('触发自动重启')
+      autoRestartCheckedRef.current = true
+
+      // 重置计数
+      audioState.setShotCount(0)
+      audioState.setShotHistory([])
+      audioState.setCurrentShotTime(0)
+      refs.shotCountRef.current = 0
+
+      // 先停止监听
+      stopListening()
+
+      // 1 秒后随机延迟重启
+      setTimeout(() => {
+        console.log('开始随机延迟重启')
+        if (startRandomDelayRef.current) {
+          startRandomDelayRef.current()
+        }
+        autoRestartCheckedRef.current = false
+      }, 1000)
+    } else if (!config.autoRestartEnabled) {
+      autoRestartCheckedRef.current = false
+    }
+  }, [audioState.shotCount, config.autoRestartEnabled, config.autoRestartLimit, refs.shotCountRef, stopListening, audioState])
 
   // 重写 toggle 函数
   const handleToggleListening = () => {
     if (audioState.stateRef.current === AppState.LISTENING || audioState.stateRef.current === AppState.DETECTED || audioState.stateRef.current === AppState.TIMING) {
       stopListening()
-      if (isWaitingForRandomDelay) {
-        cancelDelay()
+      if (isWaitingForRandomDelay && cancelDelayRef.current) {
+        cancelDelayRef.current()
       }
     } else {
       startListening()

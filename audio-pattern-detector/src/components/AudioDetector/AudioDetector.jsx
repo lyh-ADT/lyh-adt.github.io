@@ -16,6 +16,9 @@ function AudioDetector() {
   const [maxDelay, setMaxDelay] = useState(5)
   const [threshold, setThreshold] = useState(0.6)
   const [beepEnabled, setBeepEnabled] = useState(true)
+  const [shotBeepEnabled, setShotBeepEnabled] = useState(true)
+  const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
+  const [autoRestartLimit, setAutoRestartLimit] = useState(5)
 
   const canvasRef = useRef(null)
   const visualizerFrameRef = useRef(null)
@@ -36,6 +39,9 @@ function AudioDetector() {
   } = useAudioDetection({
     threshold,
     beepEnabled,
+    shotBeepEnabled,
+    autoRestartEnabled,
+    autoRestartLimit,
     minDelay,
     maxDelay
   })
@@ -171,6 +177,12 @@ function AudioDetector() {
         setThreshold={setThreshold}
         beepEnabled={beepEnabled}
         setBeepEnabled={setBeepEnabled}
+        shotBeepEnabled={shotBeepEnabled}
+        setShotBeepEnabled={setShotBeepEnabled}
+        autoRestartEnabled={autoRestartEnabled}
+        setAutoRestartEnabled={setAutoRestartEnabled}
+        autoRestartLimit={autoRestartLimit}
+        setAutoRestartLimit={setAutoRestartLimit}
       />
     </div>
   )

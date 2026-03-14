@@ -102,6 +102,9 @@ export function useAudioCoreConfig(initialConfig = {}) {
     recordDuration: initialConfig.recordDuration || 3,
     threshold: initialConfig.threshold || 0.6,
     beepEnabled: initialConfig.beepEnabled ?? true,
+    shotBeepEnabled: initialConfig.shotBeepEnabled ?? true,
+    autoRestartEnabled: initialConfig.autoRestartEnabled ?? false,
+    autoRestartLimit: initialConfig.autoRestartLimit || 5,
     minDelay: initialConfig.minDelay || 1,
     maxDelay: initialConfig.maxDelay || 5,
     matchCooldown: 100  // 枪声检测冷却时间（毫秒）

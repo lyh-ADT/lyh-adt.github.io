@@ -161,7 +161,13 @@ export function SettingsCard({
   threshold,
   setThreshold,
   beepEnabled,
-  setBeepEnabled
+  setBeepEnabled,
+  shotBeepEnabled,
+  setShotBeepEnabled,
+  autoRestartEnabled,
+  setAutoRestartEnabled,
+  autoRestartLimit,
+  setAutoRestartLimit
 }) {
   return (
     <div className="settings-card">
@@ -195,11 +201,37 @@ export function SettingsCard({
           />
         </SettingRow>
 
-        <SettingRow label="蜂鸣器提示音">
+        <SettingRow label="启动提示音">
           <ToggleSetting
             checked={beepEnabled}
             onChange={setBeepEnabled}
             labels={['开', '关']}
+          />
+        </SettingRow>
+
+        <SettingRow label="枪声提示音">
+          <ToggleSetting
+            checked={shotBeepEnabled}
+            onChange={setShotBeepEnabled}
+            labels={['开', '关']}
+          />
+        </SettingRow>
+
+        <SettingRow label="自动重启">
+          <ToggleSetting
+            checked={autoRestartEnabled}
+            onChange={setAutoRestartEnabled}
+            labels={['开', '关']}
+          />
+        </SettingRow>
+
+        <SettingRow label="重启射击次数">
+          <NumberSetting
+            value={autoRestartLimit}
+            onChange={setAutoRestartLimit}
+            min={1}
+            max={100}
+            unit="发"
           />
         </SettingRow>
       </div>

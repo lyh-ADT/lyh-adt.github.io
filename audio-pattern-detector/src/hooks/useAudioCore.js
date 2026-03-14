@@ -703,8 +703,8 @@ export function useShotDetection(refs, config, audioState, playBeep) {
         shotNumber: shotNum
       }, ...prev.slice(0, 18)])
 
-      // 播放提示音（第二枪开始）
-      if (playBeep && shotNum > 1) {
+      // 播放提示音
+      if (playBeep) {
         playBeep()
       }
 

@@ -14,7 +14,7 @@ function App() {
             className={`nav-btn ${currentPage === 'detector' ? 'active' : ''}`}
             onClick={() => setCurrentPage('detector')}
           >
-            🎤 音频检测
+            🔫 Shot Timer
           </button>
           <button
             className={`nav-btn ${currentPage === 'random' ? 'active' : ''}`}

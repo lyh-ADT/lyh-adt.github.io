@@ -113,6 +113,11 @@ h1 {
   box-shadow: 0 0 20px rgba(255, 136, 0, 0.6);
 }
 
+.status-indicator.timing {
+  background: #00aa00;
+  box-shadow: 0 0 10px rgba(0, 170, 0, 0.4);
+}
+
 .status-indicator.waiting {
   background: #ff0000;
   animation: pulse 0.3s infinite;
@@ -279,6 +284,12 @@ h1 {
 
 .match-item:last-child {
   margin-bottom: 0;
+}
+
+.match-number {
+  font-weight: 700;
+  color: #dc143c;
+  min-width: 40px;
 }
 
 .match-interval {

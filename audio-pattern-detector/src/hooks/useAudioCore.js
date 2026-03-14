@@ -11,7 +11,8 @@ export const AppState = {
   IDLE: 'idle',
   RECORDING: 'recording',
   LISTENING: 'listening',
-  DETECTED: 'detected'
+  DETECTED: 'detected',
+  TIMING: 'timing'
 }
 
 /**
@@ -98,11 +99,12 @@ export function useAudioCoreRefs() {
  */
 export function useAudioCoreConfig(initialConfig = {}) {
   const [config] = useState({
-    recordDuration: initialConfig.recordDuration || 5,
+    recordDuration: initialConfig.recordDuration || 3,
     threshold: initialConfig.threshold || 0.6,
     beepEnabled: initialConfig.beepEnabled ?? true,
-    autoRestartLimit: initialConfig.autoRestartLimit || 3,
-    matchCooldown: 800
+    minDelay: initialConfig.minDelay || 1,
+    maxDelay: initialConfig.maxDelay || 5,
+    matchCooldown: 100  // 枪声检测冷却时间（毫秒）
   })
 
   return config
@@ -208,7 +210,7 @@ export function useRecordingActions(state, refs, config, updateStatus) {
 }
 
 /**
- * 音频匹配检测 Hook
+ * 音频匹配检测 Hook（用于连续匹配模式）
  */
 export function useMatchDetection(refs, config, audioState, onMatch) {
   const {
@@ -327,7 +329,7 @@ export function useMatchDetection(refs, config, audioState, onMatch) {
 }
 
 /**
- * 音频监听操作 Hook
+ * 音频监听操作 Hook（用于连续匹配模式）
  */
 export function useListeningActions(refs, config, audioState, detectMatch) {
   const {
@@ -463,10 +465,122 @@ export function useListeningActions(refs, config, audioState, detectMatch) {
 }
 
 /**
+ * Shot Timer 监听操作 Hook
+ */
+export function useListeningActionsForShot(refs, config, audioState, detectShot) {
+  const {
+    updateStatus,
+    setShotCount,
+    setShotHistory,
+    setCurrentShotTime,
+    stateRef
+  } = audioState
+
+  const {
+    isListeningRef,
+    isDetectingRef,
+    shotCountRef,
+    lastMatchTimeRef,
+    listeningStartTimeRef,
+    inputBufferRef,
+    mediaStreamRef,
+    audioContextRef,
+    analyserRef,
+    scriptProcessorRef
+  } = refs
+
+  const startListening = useCallback(async () => {
+    // 重置状态
+    setShotCount(0)
+    setShotHistory([])
+    setCurrentShotTime('--')
+    inputBufferRef.current = []
+    lastMatchTimeRef.current = 0
+    listeningStartTimeRef.current = Date.now()
+    isDetectingRef.current = false
+    shotCountRef.current = 0
+
+    const stream = mediaStreamRef.current
+    const audioContext = audioContextRef.current
+
+    if (!stream || !audioContext) {
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseReduction: false,
+            autoGainControl: false
+          }
+        })
+        mediaStreamRef.current = newStream
+
+        const newAudioContext = new AudioContext()
+        audioContextRef.current = newAudioContext
+
+        const source = newAudioContext.createMediaStreamSource(newStream)
+        const analyser = newAudioContext.createAnalyser()
+        analyser.fftSize = 2048
+        analyserRef.current = analyser
+        source.connect(analyser)
+      } catch (err) {
+        console.error('获取音频流失败:', err)
+        updateStatus(AppState.IDLE)
+        return
+      }
+    }
+
+    updateStatus(AppState.LISTENING)
+
+    const audioCtx = audioContextRef.current
+    const source = audioCtx.createMediaStreamSource(mediaStreamRef.current)
+
+    const scriptProcessor = audioCtx.createScriptProcessor(2048, 1, 1)
+    scriptProcessorRef.current = scriptProcessor
+
+    isListeningRef.current = true
+
+    scriptProcessor.onaudioprocess = (e) => {
+      if (!isListeningRef.current ||
+          (stateRef.current !== AppState.LISTENING && stateRef.current !== AppState.TIMING) ||
+          isDetectingRef.current) return
+
+      const inputData = e.inputBuffer.getChannelData(0)
+      inputBufferRef.current.push(...inputData)
+
+      const maxBufferSize = 44100 * 2 // 最多保留 2 秒数据
+      if (inputBufferRef.current.length > maxBufferSize) {
+        inputBufferRef.current = inputBufferRef.current.slice(-maxBufferSize)
+      }
+
+      detectShot()
+    }
+
+    source.connect(scriptProcessor)
+    scriptProcessor.connect(audioCtx.destination)
+  }, [updateStatus, detectShot, setShotCount, setShotHistory, setCurrentShotTime, stateRef, isListeningRef, isDetectingRef, shotCountRef, lastMatchTimeRef, listeningStartTimeRef, inputBufferRef, mediaStreamRef, audioContextRef, analyserRef, scriptProcessorRef])
+
+  const stopListening = useCallback(() => {
+    isListeningRef.current = false
+    updateStatus(AppState.IDLE)
+    shotCountRef.current = 0
+
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect()
+      scriptProcessorRef.current = null
+    }
+  }, [updateStatus, scriptProcessorRef, shotCountRef])
+
+  return {
+    startListening,
+    stopListening
+  }
+}
+
+/**
  * 状态信息 Hook
  */
 export function useStatusInfo(audioState, refs) {
-  const { state, countdown, currentMatch } = audioState
+  const { state, countdown, currentShotTime, shotCount } = audioState
   const { referenceAudioRef } = refs
 
   const getStatusInfo = useCallback(() => {
@@ -474,13 +588,15 @@ export function useStatusInfo(audioState, refs) {
       case AppState.RECORDING:
         return { text: `正在录制... 剩余 ${countdown} 秒`, indicator: 'recording' }
       case AppState.LISTENING:
-        return { text: '正在监听参考音频...', indicator: 'listening' }
+        return { text: '等待枪声...', indicator: 'listening' }
+      case AppState.TIMING:
+        return { text: `🎯 已射击 ${shotCount} 发`, indicator: 'timing' }
       case AppState.DETECTED:
-        return { text: `🎯 检测到匹配！(${currentMatch})`, indicator: 'detected' }
+        return { text: `🎯 检测到枪声！(+${currentShotTime}ms)`, indicator: 'detected' }
       default:
-        return { text: referenceAudioRef.current ? '参考音频已录制，点击"开始监听"' : '准备就绪', indicator: 'ready' }
+        return { text: '准备就绪', indicator: 'ready' }
     }
-  }, [state, countdown, currentMatch, referenceAudioRef])
+  }, [state, countdown, currentShotTime, shotCount, referenceAudioRef])
 
   return { getStatusInfo }
 }
@@ -503,4 +619,103 @@ export function useCleanup(refs) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+}
+
+/**
+ * Shot Timer 枪声检测 Hook
+ * 检测枪声（突然的高能量峰值）并记录时间间隔
+ */
+export function useShotDetection(refs, config, audioState, playBeep) {
+  const {
+    updateStatus,
+    setShotCount,
+    setCurrentShotTime,
+    setShotHistory,
+    stateRef
+  } = audioState
+
+  const {
+    isDetectingRef,
+    shotCountRef,
+    lastMatchTimeRef,
+    listeningStartTimeRef,
+    inputBufferRef,
+    audioBufferRef
+  } = refs
+
+  // 枪声检测逻辑
+  const detectShot = useCallback(() => {
+    const now = Date.now()
+
+    if (isDetectingRef.current) return
+    if (now - lastMatchTimeRef.current < config.matchCooldown) return
+
+    // 获取最近的音频数据
+    const bufferSize = 1024 // 最近 1024 个采样点（约 23ms @ 44.1kHz）
+    if (inputBufferRef.current.length < bufferSize) return
+
+    const recentAudio = inputBufferRef.current.slice(-bufferSize)
+
+    // 计算当前音频能量（RMS）
+    let currentEnergy = 0
+    for (let i = 0; i < recentAudio.length; i++) {
+      currentEnergy += recentAudio[i] * recentAudio[i]
+    }
+    currentEnergy = Math.sqrt(currentEnergy / recentAudio.length)
+
+    // 枪声检测：能量超过阈值
+    // 阈值根据用户设置调整，0.6 阈值对应约 0.02 RMS
+    const baseThreshold = 0.01 // 基础环境噪音阈值
+    const userThreshold = config.threshold || 0.6
+    // 阈值映射：用户设置 0-1 -> 实际阈值 0.01-0.1
+    const energyThreshold = baseThreshold + (userThreshold * 0.09)
+
+    if (currentEnergy > energyThreshold) {
+      // 检测到枪声
+      isDetectingRef.current = true
+
+      const timeSinceStart = now - listeningStartTimeRef.current
+      const timeSinceLastShot = lastMatchTimeRef.current !== 0
+        ? now - lastMatchTimeRef.current
+        : timeSinceStart
+
+      lastMatchTimeRef.current = now
+
+      // 第一枪只记录开始时间，从第二枪开始记录间隔
+      const shotNum = shotCountRef.current + 1
+      shotCountRef.current = shotNum
+
+      setShotCount(prev => prev + 1)
+      setCurrentShotTime(shotNum === 1 ? 0 : timeSinceLastShot)
+
+      const nowDate = new Date()
+      const timeStr = nowDate.toLocaleTimeString()
+
+      // 记录射击历史
+      setShotHistory(prev => [{
+        time: timeStr,
+        id: now,
+        timeSinceStart,
+        timeSinceLastMatch: shotNum === 1 ? timeSinceStart : timeSinceLastShot,
+        shotNumber: shotNum
+      }, ...prev.slice(0, 18)])
+
+      // 播放提示音（第二枪开始）
+      if (playBeep && shotNum > 1) {
+        playBeep()
+      }
+
+      // 更新状态
+      updateStatus(AppState.DETECTED)
+
+      setTimeout(() => {
+        if (stateRef.current === AppState.DETECTED) {
+          updateStatus(AppState.TIMING)
+        }
+        isDetectingRef.current = false
+      }, 300)
+    }
+  }, [config, updateStatus, setShotCount, setCurrentShotTime, setShotHistory, stateRef, isDetectingRef, shotCountRef, lastMatchTimeRef, listeningStartTimeRef, inputBufferRef, playBeep])
+
+  return { detectShot }
 }

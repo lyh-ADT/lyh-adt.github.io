@@ -47,11 +47,11 @@ export function StatsGrid({ matchCount, currentMatch }) {
     <div className="stats-grid">
       <div className="stat-card">
         <div className="stat-value">{matchCount}</div>
-        <div className="stat-label">匹配次数</div>
+        <div className="stat-label">射击次数</div>
       </div>
       <div className="stat-card">
-        <div className="stat-value">{currentMatch}</div>
-        <div className="stat-label">当前匹配度</div>
+        <div className="stat-value">{currentMatch === 0 ? '--' : `${currentMatch}`}</div>
+        <div className="stat-label">上次间隔 (ms)</div>
       </div>
     </div>
   )
@@ -63,16 +63,16 @@ export function StatsGrid({ matchCount, currentMatch }) {
 export function MatchHistoryCard({ matchHistory }) {
   return (
     <div className="match-history-card">
-      <h3>📋 检测历史</h3>
+      <h3>📋 射击历史</h3>
       <div id="matchList">
         {matchHistory.length === 0 ? (
-          <div>暂无匹配记录</div>
+          <div>暂无射击记录</div>
         ) : (
-          matchHistory.map((match) => (
+          matchHistory.map((match, index) => (
             <div key={match.id} className="match-item">
-              <span className="match-interval">+{match.timeSinceLastMatch}ms</span>
-              <span className="match-score">{(match.score * 100).toFixed(0)}%</span>
-              <span className="match-time">{match.time} (累计：{match.timeSinceStart}ms)</span>
+              <span className="match-number">#{matchHistory.length - index}</span>
+              <span className="match-interval">{match.shotNumber === 1 ? '开始' : `+${match.timeSinceLastMatch}ms`}</span>
+              <span className="match-time">{match.time}</span>
             </div>
           ))
         )}
@@ -103,9 +103,10 @@ export function NumberSetting({ value, onChange, min, max, unit }) {
         type="number"
         className="setting-input"
         value={value}
-        onChange={(e) => onChange(Math.max(min, Math.min(max, parseInt(e.target.value) || value)))}
+        onChange={(e) => onChange(Math.max(min, Math.min(max, parseFloat(e.target.value) || value)))}
         min={min}
         max={max}
+        step="0.1"
       />
       {unit && <span className="setting-label">{unit}</span>}
     </>
@@ -153,24 +154,33 @@ export function ToggleSetting({ checked, onChange, labels }) {
  * 设置卡片组件
  */
 export function SettingsCard({
-  recordDuration,
-  setRecordDuration,
+  minDelay,
+  setMinDelay,
+  maxDelay,
+  setMaxDelay,
   threshold,
   setThreshold,
   beepEnabled,
-  setBeepEnabled,
-  autoRestartLimit,
-  setAutoRestartLimit
+  setBeepEnabled
 }) {
   return (
     <div className="settings-card">
       <h3>⚙️ 设置</h3>
       <div className="settings">
-        <SettingRow label="录制时长 (秒)">
+        <SettingRow label="最小延迟（秒）">
           <NumberSetting
-            value={recordDuration}
-            onChange={setRecordDuration}
-            min={1}
+            value={minDelay}
+            onChange={setMinDelay}
+            min={0.1}
+            max={10}
+          />
+        </SettingRow>
+
+        <SettingRow label="最大延迟（秒）">
+          <NumberSetting
+            value={maxDelay}
+            onChange={setMaxDelay}
+            min={0.1}
             max={10}
           />
         </SettingRow>
@@ -190,16 +200,6 @@ export function SettingsCard({
             checked={beepEnabled}
             onChange={setBeepEnabled}
             labels={['开', '关']}
-          />
-        </SettingRow>
-
-        <SettingRow label="自动重启次数上限">
-          <NumberSetting
-            value={autoRestartLimit}
-            onChange={setAutoRestartLimit}
-            min={1}
-            max={100}
-            unit="次"
           />
         </SettingRow>
       </div>

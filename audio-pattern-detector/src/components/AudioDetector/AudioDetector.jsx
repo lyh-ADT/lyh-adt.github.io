@@ -12,33 +12,32 @@ import './styles.css'
 
 function AudioDetector() {
   // 本地设置状态
-  const [recordDuration, setRecordDuration] = useState(5)
+  const [minDelay, setMinDelay] = useState(1)
+  const [maxDelay, setMaxDelay] = useState(5)
   const [threshold, setThreshold] = useState(0.6)
   const [beepEnabled, setBeepEnabled] = useState(true)
-  const [autoRestartLimit, setAutoRestartLimit] = useState(3)
 
   const canvasRef = useRef(null)
   const visualizerFrameRef = useRef(null)
 
-  // 使用音频检测 Hook
+  // 使用 Shot Timer Hook
   const {
     state,
-    matchCount,
-    currentMatch,
-    matchHistory,
+    shotCount,
+    currentShotTime,
+    shotHistory,
     countdown,
     randomDelayCountdown,
     isWaitingForRandomDelay,
-    toggleRecording,
     toggleListening,
     startListeningWithRandomDelay,
     getStatusInfo,
     analyserRef
   } = useAudioDetection({
-    recordDuration,
     threshold,
     beepEnabled,
-    autoRestartLimit
+    minDelay,
+    maxDelay
   })
 
   // 绘制频谱
@@ -107,7 +106,7 @@ function AudioDetector() {
 
   // 可视化循环
   useEffect(() => {
-    if (state === AppState.RECORDING || state === AppState.LISTENING) {
+    if (state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING) {
       const animate = () => {
         if (analyserRef.current) {
           const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
@@ -128,51 +127,50 @@ function AudioDetector() {
 
   const statusInfo = getStatusInfo()
 
+  // 如果正在等待随机延迟，显示等待信息
+  const displayStatus = isWaitingForRandomDelay
+    ? { indicator: 'waiting', text: `等待中... 剩余 ${randomDelayCountdown.toFixed(1)} 秒` }
+    : statusInfo
+
   return (
     <div className="app-layout">
       <div className={`container ${isWaitingForRandomDelay ? 'waiting' : ''}`}>
-        <h1>🎤 音频模式检测器</h1>
-        <p className="subtitle">录制参考音频并实时检测其出现</p>
+        <h1>🔫 Shot Timer</h1>
+        <p className="subtitle">随机延迟后发出提示音，检测枪声并记录射击间隔时间</p>
 
-        <StatusBar indicator={statusInfo.indicator} text={statusInfo.text} />
+        <StatusBar indicator={displayStatus.indicator} text={displayStatus.text} />
 
         <div className="controls">
           <ControlButton
-            onClick={toggleRecording}
-            variant={state === AppState.RECORDING ? 'danger' : 'primary'}
-            icon={state === AppState.RECORDING ? '⏹️' : '🔴'}
-            label={state === AppState.RECORDING ? '停止录制' : '录制参考音频'}
-          />
-          <ControlButton
             onClick={toggleListening}
             variant="secondary"
-            icon={state === AppState.LISTENING || state === AppState.DETECTED ? '⏹️' : '👂'}
-            label={state === AppState.LISTENING || state === AppState.DETECTED ? '停止监听' : '开始监听'}
+            icon={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING ? '⏹️' : '▶️'}
+            label={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING ? '停止' : '开始'}
           />
           <ControlButton
             onClick={startListeningWithRandomDelay}
             variant="warning"
             icon="🎲"
-            label={isWaitingForRandomDelay ? '延时中...' : '随机延时监听'}
+            label={isWaitingForRandomDelay ? '延时中...' : '随机延时启动'}
           />
         </div>
 
         <Visualizer canvasRef={canvasRef} />
 
-        <StatsGrid matchCount={matchCount} currentMatch={currentMatch} />
+        <StatsGrid matchCount={shotCount} currentMatch={currentShotTime} />
       </div>
 
-      <MatchHistoryCard matchHistory={matchHistory} />
+      <MatchHistoryCard matchHistory={shotHistory} />
 
       <SettingsCard
-        recordDuration={recordDuration}
-        setRecordDuration={setRecordDuration}
+        minDelay={minDelay}
+        setMinDelay={setMinDelay}
+        maxDelay={maxDelay}
+        setMaxDelay={setMaxDelay}
         threshold={threshold}
         setThreshold={setThreshold}
         beepEnabled={beepEnabled}
         setBeepEnabled={setBeepEnabled}
-        autoRestartLimit={autoRestartLimit}
-        setAutoRestartLimit={setAutoRestartLimit}
       />
     </div>
   )

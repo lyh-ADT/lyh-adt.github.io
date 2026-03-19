@@ -102,6 +102,7 @@ export function useAudioDetection(initialConfig = {}) {
   // 计时器状态
   const [elapsedTime, setElapsedTime] = useState(0)
   const [parTimeRemaining, setParTimeRemaining] = useState(null)
+  const [isInfiniteLoop, setIsInfiniteLoop] = useState(false)
   const timerRef = useRef(null)
   const parTimeTimerRef = useRef(null)
   const startTimeRef = useRef(0)
@@ -147,6 +148,10 @@ export function useAudioDetection(initialConfig = {}) {
         parTimeEnabledRef.current = true
         parTimeStartTimeRef.current = Date.now()
         setParTimeRemaining(config.parTime)
+        // 如果同时启用了自动重启，则标记为无限循环模式
+        if (config.autoRestartEnabled) {
+          setIsInfiniteLoop(true)
+        }
       }
 
       const updateParTimeCountdown = () => {
@@ -160,7 +165,7 @@ export function useAudioDetection(initialConfig = {}) {
           if (config.beepEnabled) {
             playBeep()
           }
-          // 保存当前计时结果并停止
+          // 保存当前计时结果
           const finalTime = Date.now() - startTimeRef.current
           const now = new Date()
           const timeStr = now.toLocaleTimeString()
@@ -178,6 +183,27 @@ export function useAudioDetection(initialConfig = {}) {
           setElapsedTime(0)
           stopListening()
           parTimeEnabledRef.current = false
+
+          // 如果自动重启开关打开，则自动重启
+          if (config.autoRestartEnabled) {
+            // 重置计数
+            audioState.setShotCount(0)
+            audioState.setShotHistory(prev => prev.slice(0, 19)) // 保留刚保存的记录
+            audioState.setCurrentShotTime(0)
+            refs.shotCountRef.current = 0
+
+            // 1 秒后随机延迟重启
+            setTimeout(() => {
+              startTimeRef.current = Date.now()
+              setElapsedTime(0)
+              if (startRandomDelayRef.current) {
+                startRandomDelayRef.current()
+              }
+            }, 1000)
+          } else {
+            // 只有在非自动重启时才设置为 false
+            setIsInfiniteLoop(false)
+          }
         } else {
           parTimeTimerRef.current = requestAnimationFrame(updateParTimeCountdown)
         }
@@ -238,7 +264,12 @@ export function useAudioDetection(initialConfig = {}) {
 
   // 重写 toggle 函数
   const handleToggleListening = () => {
-    if (audioState.stateRef.current === AppState.LISTENING || audioState.stateRef.current === AppState.DETECTED || audioState.stateRef.current === AppState.TIMING) {
+    const isListeningState = audioState.stateRef.current === AppState.LISTENING ||
+                             audioState.stateRef.current === AppState.DETECTED ||
+                             audioState.stateRef.current === AppState.TIMING
+
+    // 如果是无限循环模式，或者正在监听，则执行停止操作
+    if (isInfiniteLoop || isListeningState) {
       // 停止时保存最终时间到历史记录
       if (elapsedTime > 0) {
         const now = new Date()
@@ -254,7 +285,21 @@ export function useAudioDetection(initialConfig = {}) {
         }, ...prev.slice(0, 18)])
       }
 
+      // 取消 Par Time 计时器
+      if (parTimeTimerRef.current) {
+        cancelAnimationFrame(parTimeTimerRef.current)
+      }
+      parTimeEnabledRef.current = false
+      setParTimeRemaining(null)
+
+      // 取消主计时器
+      if (timerRef.current) {
+        cancelAnimationFrame(timerRef.current)
+      }
+      setElapsedTime(0)
+
       stopListening()
+      setIsInfiniteLoop(false)
       if (isWaitingForRandomDelay && cancelDelayRef.current) {
         cancelDelayRef.current()
       }
@@ -274,6 +319,7 @@ export function useAudioDetection(initialConfig = {}) {
     isWaitingForRandomDelay,
     elapsedTime,
     parTimeRemaining,
+    isInfiniteLoop,
 
     // 操作函数
     startListening,

@@ -39,7 +39,8 @@ function AudioDetector() {
     getStatusInfo,
     analyserRef,
     elapsedTime,
-    parTimeRemaining
+    parTimeRemaining,
+    isInfiniteLoop
   } = useAudioDetection({
     threshold,
     beepEnabled,
@@ -177,8 +178,8 @@ function AudioDetector() {
           <ControlButton
             onClick={toggleListening}
             variant="secondary"
-            icon={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING ? '⏹️' : '▶️'}
-            label={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING ? '停止' : '开始'}
+            icon={(state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isInfiniteLoop) ? '⏹️' : '▶️'}
+            label={(state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isInfiniteLoop) ? '停止' : '开始'}
           />
           <ControlButton
             onClick={startListeningWithRandomDelay}

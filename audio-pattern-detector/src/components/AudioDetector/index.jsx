@@ -75,7 +75,7 @@ export function MatchHistoryCard({ matchHistory }) {
                   : `+${match.timeSinceLastMatch}ms`
                 }
               </span>
-              <span className="match-time">{match.time}</span>
+              <span className="match-time">{match.timeSinceStart}ms</span>
             </div>
           ))
         )}

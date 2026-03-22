@@ -177,7 +177,7 @@ function AudioDetector() {
         <div className="controls">
           <ControlButton
             onClick={toggleListening}
-            variant="secondary"
+            variant="primary"
             icon={(state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isInfiniteLoop || isWaitingForRandomDelay) ? '⏹️' : '▶️'}
             label={(state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isInfiniteLoop || isWaitingForRandomDelay) ? '停止' : '开始'}
           />
@@ -186,6 +186,7 @@ function AudioDetector() {
             variant="warning"
             icon="🎲"
             label={isWaitingForRandomDelay ? '延时中...' : '随机延时启动'}
+            disabled={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isWaitingForRandomDelay}
           />
         </div>
 

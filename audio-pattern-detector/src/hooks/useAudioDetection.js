@@ -268,8 +268,8 @@ export function useAudioDetection(initialConfig = {}) {
                              audioState.stateRef.current === AppState.DETECTED ||
                              audioState.stateRef.current === AppState.TIMING
 
-    // 如果是无限循环模式，或者正在监听，则执行停止操作
-    if (isInfiniteLoop || isListeningState) {
+    // 如果是无限循环模式，正在监听，或者正在等待随机延迟，则执行停止操作
+    if (isInfiniteLoop || isListeningState || isWaitingForRandomDelay) {
       // 停止时保存最终时间到历史记录
       if (elapsedTime > 0) {
         const now = new Date()

@@ -63,6 +63,7 @@ export function useCustomMode(nodes = [], options = {}) {
   const startTimeRef = useRef(0)  // 当前节点的启动时间
   const parTimeStartTimeRef = useRef(0)
   const sequenceStartTimeRef = useRef(0)  // 整个序列的启动时间
+  const lastNodeEndTimeRef = useRef(0)  // 上一个节点的结束时间
   const shotCountRef = useRef(0)
   const shotHistoryRef = useRef([])
   const onNodeCompleteRef = useRef(null)
@@ -204,12 +205,19 @@ export function useCustomMode(nodes = [], options = {}) {
     const now = new Date()
     const timeStr = now.toLocaleTimeString()
     const timeSinceStart = Date.now() - sequenceStartTimeRef.current
+    // 计算与上一个节点的时间间隔
+    const timeSinceLastNode = lastNodeEndTimeRef.current !== 0
+      ? timeSinceStart - (lastNodeEndTimeRef.current - sequenceStartTimeRef.current)
+      : timeSinceStart
+
+    // 更新上一个节点结束时间为当前时间
+    lastNodeEndTimeRef.current = Date.now()
 
     const newHistory = [{
       time: timeStr,
       id: Date.now(),
       timeSinceStart,
-      timeSinceLastMatch: shotData?.timeSinceLastMatch || timeSinceStart,
+      timeSinceLastMatch: timeSinceLastNode,
       shotNumber: shotCountRef.current,
       nodeType: 'waitForShot'
     }, ...shotHistoryRef.current.slice(0, 18)]
@@ -233,14 +241,21 @@ export function useCustomMode(nodes = [], options = {}) {
     const now = new Date()
     const timeStr = now.toLocaleTimeString()
     const timeSinceStart = Date.now() - sequenceStartTimeRef.current
+    // 计算与上一个节点的时间间隔
+    const timeSinceLastNode = lastNodeEndTimeRef.current !== 0
+      ? timeSinceStart - (lastNodeEndTimeRef.current - sequenceStartTimeRef.current)
+      : timeSinceStart
 
-    console.log('添加节点完成记录:', node.type, '耗时:', elapsedTime, '当前历史记录长度:', shotHistoryRef.current.length)
+    // 更新上一个节点结束时间为当前时间
+    lastNodeEndTimeRef.current = Date.now()
+
+    console.log('添加节点完成记录:', node.type, '耗时:', elapsedTime, '距上节点:', timeSinceLastNode, '当前历史记录长度:', shotHistoryRef.current.length)
 
     const newHistory = [{
       time: timeStr,
       id: Date.now(),
       timeSinceStart,
-      timeSinceLastMatch: elapsedTime,
+      timeSinceLastMatch: timeSinceLastNode,
       shotNumber: shotCountRef.current + 1,
       nodeType: node.type,
       nodeCompleted: true

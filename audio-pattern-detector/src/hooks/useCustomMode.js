@@ -234,6 +234,8 @@ export function useCustomMode(nodes = [], options = {}) {
     const timeStr = now.toLocaleTimeString()
     const timeSinceStart = Date.now() - sequenceStartTimeRef.current
 
+    console.log('添加节点完成记录:', node.type, '耗时:', elapsedTime, '当前历史记录长度:', shotHistoryRef.current.length)
+
     const newHistory = [{
       time: timeStr,
       id: Date.now(),
@@ -244,6 +246,7 @@ export function useCustomMode(nodes = [], options = {}) {
       nodeCompleted: true
     }, ...shotHistoryRef.current.slice(0, 18)]
 
+    console.log('新历史记录长度:', newHistory.length)
     setShotHistory(newHistory)
     shotHistoryRef.current = newHistory
   }, [])
@@ -421,8 +424,8 @@ export function useCustomMode(nodes = [], options = {}) {
     refs.inputBufferRef.current = []
     refs.isDetectingRef.current = false
 
-    // 启动音频监听（保持 lastMatchTime 以启用 cooldown）
-    startListening(true)
+    // 启动音频监听（跳过状态重置，保留历史记录）
+    startListening({ skipStateReset: true, keepLastMatchTime: true })
 
     // 更新计时器
     const animate = () => {

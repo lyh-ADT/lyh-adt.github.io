@@ -492,11 +492,18 @@ export function useListeningActionsForShot(refs, config, audioState, detectShot)
     scriptProcessorRef
   } = refs
 
-  const startListening = useCallback(async (keepLastMatchTime = false) => {
-    // 重置状态
-    setShotCount(0)
-    setShotHistory([])
-    setCurrentShotTime('--')
+  const startListening = useCallback(async (options = {}) => {
+    const {
+      keepLastMatchTime = false,
+      skipStateReset = false  // 自定义模式使用，跳过状态重置
+    } = options
+
+    // 只在非 skipStateReset 模式下重置状态
+    if (!skipStateReset) {
+      setShotCount(0)
+      setShotHistory([])
+      setCurrentShotTime('--')
+    }
     inputBufferRef.current = []
     // 只在非 keepLastMatchTime 模式下重置 lastMatchTimeRef
     // keepLastMatchTime 用于连续等待枪声的场景（如自定义模式的多个 WaitForShot 节点）
@@ -505,7 +512,9 @@ export function useListeningActionsForShot(refs, config, audioState, detectShot)
     }
     listeningStartTimeRef.current = Date.now()
     isDetectingRef.current = false
-    shotCountRef.current = 0
+    if (!skipStateReset) {
+      shotCountRef.current = 0
+    }
 
     const stream = mediaStreamRef.current
     const audioContext = audioContextRef.current

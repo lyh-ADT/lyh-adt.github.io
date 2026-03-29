@@ -67,23 +67,32 @@ function StatsGrid({ matchCount, currentMatch }) {
 function MatchHistoryCard({ matchHistory }) {
   return (
     <div className="match-history-card">
-      <h3>📋 射击历史</h3>
+      <h3>📋 执行历史</h3>
       <div id="matchList">
         {matchHistory.length === 0 ? (
-          <div className="no-history">暂无射击记录</div>
+          <div className="no-history">暂无记录</div>
         ) : (
-          matchHistory.map((match, index) => (
-            <div key={match.id} className="match-item">
-              <span className="match-number">#{matchHistory.length - index}</span>
-              <span className="match-interval">
-                {match.totalTime
-                  ? `总时间：${match.timeSinceStart}ms`
-                  : `+${match.timeSinceLastMatch}ms`
-                }
-              </span>
-              <span className="match-time">{match.time}</span>
-            </div>
-          ))
+          matchHistory.map((match, index) => {
+            // 判断是否是节点完成记录
+            const isNodeComplete = match.nodeType && match.nodeType !== 'waitForShot'
+            const nodeIcon = isNodeComplete ? getNodeIcon(match.nodeType) : '🔫'
+            const nodeName = isNodeComplete ? getNodeDisplayName(match.nodeType) : '枪声'
+
+            return (
+              <div key={match.id} className="match-item">
+                <span className="match-number">
+                  {nodeIcon} #{matchHistory.length - index}
+                </span>
+                <span className="match-interval">
+                  {isNodeComplete
+                    ? `${nodeName}: ${match.timeSinceLastMatch}ms`
+                    : `+${match.timeSinceLastMatch}ms`
+                  }
+                </span>
+                <span className="match-time">{match.timeSinceStart}ms</span>
+              </div>
+            )
+          })
         )}
       </div>
     </div>

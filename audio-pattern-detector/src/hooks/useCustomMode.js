@@ -60,13 +60,14 @@ export function useCustomMode(nodes = [], options = {}) {
   const currentNodeTypeRef = useRef(CurrentNodeType.NONE)
   const timerRef = useRef(null)
   const parTimeTimerRef = useRef(null)
-  const startTimeRef = useRef(0)
+  const startTimeRef = useRef(0)  // 当前节点的启动时间
   const parTimeStartTimeRef = useRef(0)
-  const sequenceStartTimeRef = useRef(0)
+  const sequenceStartTimeRef = useRef(0)  // 整个序列的启动时间
   const shotCountRef = useRef(0)
   const shotHistoryRef = useRef([])
   const onNodeCompleteRef = useRef(null)
   const onSequenceCompleteRef = useRef(null)
+  const sequenceStartedRef = useRef(false)  // 序列是否已启动
 
   // 更新 refs
   useEffect(() => {
@@ -199,17 +200,18 @@ export function useCustomMode(nodes = [], options = {}) {
     shotCountRef.current += 1
     setShotCount(shotCountRef.current)
 
-    // 添加到历史记录
+    // 添加到历史记录 - 使用序列开始时间而不是节点开始时间
     const now = new Date()
     const timeStr = now.toLocaleTimeString()
-    const timeSinceStart = Date.now() - startTimeRef.current
+    const timeSinceStart = Date.now() - sequenceStartTimeRef.current
 
     const newHistory = [{
       time: timeStr,
       id: Date.now(),
       timeSinceStart,
       timeSinceLastMatch: shotData?.timeSinceLastMatch || timeSinceStart,
-      shotNumber: shotCountRef.current
+      shotNumber: shotCountRef.current,
+      nodeType: 'waitForShot'
     }, ...shotHistoryRef.current.slice(0, 18)]
 
     setShotHistory(newHistory)
@@ -225,6 +227,26 @@ export function useCustomMode(nodes = [], options = {}) {
   useEffect(() => {
     handleShotDetectedRef.current = handleShotDetected
   }, [handleShotDetected])
+
+  // 添加节点完成记录到历史
+  const addNodeCompleteToHistory = useCallback((node, elapsedTime) => {
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString()
+    const timeSinceStart = Date.now() - sequenceStartTimeRef.current
+
+    const newHistory = [{
+      time: timeStr,
+      id: Date.now(),
+      timeSinceStart,
+      timeSinceLastMatch: elapsedTime,
+      shotNumber: shotCountRef.current + 1,
+      nodeType: node.type,
+      nodeCompleted: true
+    }, ...shotHistoryRef.current.slice(0, 18)]
+
+    setShotHistory(newHistory)
+    shotHistoryRef.current = newHistory
+  }, [])
 
   // 执行下一个节点
   const executeNextNodeRef = useRef(null)
@@ -242,6 +264,10 @@ export function useCustomMode(nodes = [], options = {}) {
       // 序列完成
       setExecutionState(ExecutionState.COMPLETED)
       executionStateRef.current = ExecutionState.COMPLETED
+
+      // 停止音频监听，防止继续检测枪声
+      stopListening()
+
       onSequenceCompleteRef.current?.({
         shotCount: shotCountRef.current,
         shotHistory: shotHistoryRef.current,
@@ -270,7 +296,13 @@ export function useCustomMode(nodes = [], options = {}) {
 
     setCurrentNodeIndex(index)
     currentNodeIndexRef.current = index
-    sequenceStartTimeRef.current = Date.now()
+
+    // 只在序列第一次启动时设置 sequenceStartTimeRef
+    if (!sequenceStartedRef.current) {
+      sequenceStartTimeRef.current = Date.now()
+      sequenceStartedRef.current = true
+    }
+    startTimeRef.current = Date.now()
 
     const { type, config } = node
 
@@ -333,13 +365,14 @@ export function useCustomMode(nodes = [], options = {}) {
       if (remaining <= 0) {
         clearInterval(updateInterval)
         setCountdown(0)
-        onNodeCompleteRef.current?.({ node: { type: NodeType.RandomDelay, config } })
-        executeNextNode()
+        // 添加节点完成记录
+        addNodeCompleteToHistory({ type: NodeType.RandomDelay }, Math.floor(delay))
+        executeNextNodeRef.current()
       }
     }, 100)
 
     timerRef.current = { type: 'randomDelay', cleanup: () => clearInterval(updateInterval) }
-  }, [])
+  }, [addNodeCompleteToHistory])
 
   // 执行固定延迟节点
   const executeFixedDelayNode = useCallback((config) => {
@@ -360,13 +393,14 @@ export function useCustomMode(nodes = [], options = {}) {
       if (remaining <= 0) {
         clearInterval(updateInterval)
         setCountdown(0)
-        onNodeCompleteRef.current?.({ node: { type: NodeType.FixedDelay, config } })
-        executeNextNode()
+        // 添加节点完成记录
+        addNodeCompleteToHistory({ type: NodeType.FixedDelay }, delay)
+        executeNextNodeRef.current()
       }
     }, 100)
 
     timerRef.current = { type: 'fixedDelay', cleanup: () => clearInterval(updateInterval) }
-  }, [])
+  }, [addNodeCompleteToHistory])
 
   // 执行等待枪声节点
   const executeWaitForShotNode = useCallback((config) => {
@@ -428,7 +462,8 @@ export function useCustomMode(nodes = [], options = {}) {
           playBeep()
         }
 
-        onNodeCompleteRef.current?.({ node: { type: NodeType.ParTime, config }, timeout: true })
+        // 添加节点完成记录
+        addNodeCompleteToHistory({ type: NodeType.ParTime }, parTime)
 
         if (stopOnTimeout) {
           stopListening()
@@ -444,7 +479,7 @@ export function useCustomMode(nodes = [], options = {}) {
           setCurrentNodeType(CurrentNodeType.NONE)
           currentNodeTypeRef.current = CurrentNodeType.NONE
         } else {
-          executeNextNode()
+          executeNextNodeRef.current()
         }
       } else {
         parTimeTimerRef.current = requestAnimationFrame(updateParTime)
@@ -461,7 +496,7 @@ export function useCustomMode(nodes = [], options = {}) {
         }
       }
     }
-  }, [playBeep, stopListening, executeNextNode])
+  }, [playBeep, stopListening, addNodeCompleteToHistory])
 
   // 执行蜂鸣器节点
   const executeBeepNode = useCallback((config) => {
@@ -473,12 +508,13 @@ export function useCustomMode(nodes = [], options = {}) {
     const duration = config?.duration || 100
 
     setTimeout(() => {
-      onNodeCompleteRef.current?.({ node: { type: NodeType.Beep, config } })
-      executeNextNode()
+      // 添加节点完成记录
+      addNodeCompleteToHistory({ type: NodeType.Beep }, duration)
+      executeNextNodeRef.current()
     }, duration + 50)
 
     timerRef.current = { type: 'beep', cleanup: () => {} }
-  }, [playBeepNode, executeNextNode])
+  }, [playBeepNode, addNodeCompleteToHistory])
 
   // 执行自动重启节点
   const executeAutoRestartNode = useCallback((config) => {
@@ -506,7 +542,7 @@ export function useCustomMode(nodes = [], options = {}) {
             shotCountRef.current = 0
             setShotCount(0)
             setShotHistory([])
-            executeNode(0)
+            executeNodeRef.current(0)
           }
         }, 100)
 
@@ -520,7 +556,7 @@ export function useCustomMode(nodes = [], options = {}) {
     }
 
     checkRestart()
-  }, [executeNode])
+  }, [])
 
   // 开始执行
   const start = useCallback(() => {

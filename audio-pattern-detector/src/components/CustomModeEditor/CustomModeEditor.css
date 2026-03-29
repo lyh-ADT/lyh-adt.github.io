@@ -1,0 +1,358 @@
+.custom-mode-editor {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.editor-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.5rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* 预设模式按钮 */
+.preset-modes {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  background: #2a2a3e;
+  border: 1px solid #3a3a4e;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.preset-btn:hover:not(:disabled) {
+  background: #3a3a4e;
+  border-color: #667eea;
+}
+
+.preset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 添加节点区域 */
+.add-node-section {
+  margin-bottom: 20px;
+}
+
+.section-label {
+  display: block;
+  color: #888;
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.add-node-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.add-node-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: #2a2a3e;
+  border: 2px dashed #3a3a4e;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 80px;
+}
+
+.add-node-btn:hover:not(:disabled) {
+  border-color: #667eea;
+  background: #3a3a4e;
+}
+
+.add-node-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.add-node-btn .node-icon {
+  font-size: 1.5rem;
+}
+
+.add-node-btn .node-name {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* 节点列表 */
+.node-list-section {
+  margin-bottom: 20px;
+}
+
+.node-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.node-item {
+  display: flex;
+  align-items: center;
+  background: #2a2a3e;
+  border: 1px solid #3a3a4e;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.node-item:hover {
+  border-color: #667eea;
+}
+
+.node-item.selected {
+  border-color: #667eea;
+  background: #3a3a4e;
+}
+
+.node-item-left {
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+}
+
+.node-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #667eea;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.node-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.node-item-header .node-icon {
+  font-size: 1.2rem;
+}
+
+.node-item-header .node-name {
+  color: #fff;
+  font-weight: 500;
+}
+
+.node-item-description {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.node-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #3a3a4e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: #4a4a5e;
+}
+
+.action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #dc3545;
+}
+
+.move-btn {
+  background: #2a2a3e;
+}
+
+.move-btn:hover:not(:disabled) {
+  background: #3a3a4e;
+}
+
+/* 节点配置面板 */
+.node-config-panel {
+  background: #2a2a3e;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 10px;
+}
+
+.config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #3a3a4e;
+}
+
+.config-header h3 {
+  margin: 0;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+}
+
+.config-header .node-icon {
+  font-size: 1.3rem;
+}
+
+.config-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.config-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.config-input label {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.config-input input {
+  background: #1a1a2e;
+  border: 1px solid #3a3a4e;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.config-input input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.config-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.toggle-input label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #aaa;
+  cursor: pointer;
+}
+
+.toggle-input input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.toggle-input input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.toggle-label {
+  font-size: 0.95rem;
+}
+
+/* 按钮样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
+.btn-secondary {
+  background: #3a3a4e;
+  color: #fff;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #4a4a5e;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -492,13 +492,17 @@ export function useListeningActionsForShot(refs, config, audioState, detectShot)
     scriptProcessorRef
   } = refs
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(async (keepLastMatchTime = false) => {
     // 重置状态
     setShotCount(0)
     setShotHistory([])
     setCurrentShotTime('--')
     inputBufferRef.current = []
-    lastMatchTimeRef.current = 0
+    // 只在非 keepLastMatchTime 模式下重置 lastMatchTimeRef
+    // keepLastMatchTime 用于连续等待枪声的场景（如自定义模式的多个 WaitForShot 节点）
+    if (!keepLastMatchTime) {
+      lastMatchTimeRef.current = 0
+    }
     listeningStartTimeRef.current = Date.now()
     isDetectingRef.current = false
     shotCountRef.current = 0
@@ -627,8 +631,13 @@ export function useCleanup(refs) {
 /**
  * Shot Timer 枪声检测 Hook
  * 检测枪声（突然的高能量峰值）并记录时间间隔
+ * @param {Object} refs - refs 对象
+ * @param {Object} config - 配置对象
+ * @param {Object} audioState - 音频状态
+ * @param {Function} playBeep - 播放蜂鸣器函数
+ * @param {Function} onShotDetected - 枪声检测后的回调函数
  */
-export function useShotDetection(refs, config, audioState, playBeep) {
+export function useShotDetection(refs, config, audioState, playBeep, onShotDetected = null) {
   const {
     updateStatus,
     setShotCount,
@@ -645,6 +654,11 @@ export function useShotDetection(refs, config, audioState, playBeep) {
     inputBufferRef,
     audioBufferRef
   } = refs
+
+  const onShotDetectedRef = useRef(onShotDetected)
+  useEffect(() => {
+    onShotDetectedRef.current = onShotDetected
+  }, [onShotDetected])
 
   // 枪声检测逻辑
   const detectShot = useCallback(() => {
@@ -717,6 +731,15 @@ export function useShotDetection(refs, config, audioState, playBeep) {
         }
         isDetectingRef.current = false
       }, 300)
+
+      // 调用外部回调
+      if (onShotDetectedRef.current) {
+        onShotDetectedRef.current({
+          timeSinceStart,
+          timeSinceLastShot,
+          shotNumber: shotNum
+        })
+      }
     }
   }, [config, updateStatus, setShotCount, setCurrentShotTime, setShotHistory, stateRef, isDetectingRef, shotCountRef, lastMatchTimeRef, listeningStartTimeRef, inputBufferRef, playBeep])
 

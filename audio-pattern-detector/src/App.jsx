@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import AudioDetector from './components/AudioDetector/AudioDetector'
 import RandomDelayBeep from './components/RandomDelayBeep'
+import CustomModePage from './components/CustomModePage'
 import './App.css'
 
 function App() {
@@ -22,9 +23,17 @@ function App() {
           >
             🎲 随机 Beep 计时器
           </button>
+          <button
+            className={`nav-btn ${currentPage === 'custom' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('custom')}
+          >
+            🎯 自定义模式
+          </button>
         </div>
       </nav>
-      {currentPage === 'detector' ? <AudioDetector /> : <RandomDelayBeep />}
+      {currentPage === 'detector' ? <AudioDetector /> :
+       currentPage === 'random' ? <RandomDelayBeep /> :
+       <CustomModePage />}
     </>
   )
 }

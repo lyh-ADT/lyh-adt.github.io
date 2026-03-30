@@ -382,15 +382,6 @@ function NodeConfigPanel({ node, index, onUpdateConfig, onDelete, disabled }) {
         {type === NodeType.AutoRestart && (
           <>
             <ConfigInput
-              label="射击次数"
-              value={config.shotCount}
-              onChange={(v) => onUpdateConfig('shotCount', Math.max(1, Math.floor(v)))}
-              min={1}
-              max={20}
-              step={1}
-              disabled={disabled}
-            />
-            <ConfigInput
               label="重启前延迟 (ms)"
               value={config.delayBeforeRestart}
               onChange={(v) => onUpdateConfig('delayBeforeRestart', Math.max(0, Math.floor(v)))}

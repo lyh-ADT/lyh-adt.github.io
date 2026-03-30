@@ -539,42 +539,32 @@ export function useCustomMode(nodes = [], options = {}) {
     setCurrentNodeType(CurrentNodeType.RESTART_DELAY)
     currentNodeTypeRef.current = CurrentNodeType.RESTART_DELAY
 
-    const shotCount = config?.shotCount || 5
     const delayBeforeRestart = config?.delayBeforeRestart || 1000
 
-    // 等待达到射击次数后重启
-    const checkRestart = () => {
-      if (shotCountRef.current >= shotCount) {
-        // 达到射击次数，延迟后重启
-        setCountdown(delayBeforeRestart / 1000)
+    // 添加节点完成记录
+    addNodeCompleteToHistory({ type: NodeType.AutoRestart }, delayBeforeRestart)
 
-        const startTime = Date.now()
-        const updateInterval = setInterval(() => {
-          const elapsed = (Date.now() - startTime) / 1000
-          const remaining = Math.max(0, (delayBeforeRestart / 1000) - elapsed)
-          setCountdown(parseFloat(remaining.toFixed(1)))
+    // 延迟后直接从头开始执行序列
+    setCountdown(delayBeforeRestart / 1000)
 
-          if (remaining <= 0) {
-            clearInterval(updateInterval)
-            // 重启序列
-            shotCountRef.current = 0
-            setShotCount(0)
-            setShotHistory([])
-            executeNodeRef.current(0)
-          }
-        }, 100)
+    const startTime = Date.now()
+    const updateInterval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000
+      const remaining = Math.max(0, (delayBeforeRestart / 1000) - elapsed)
+      setCountdown(parseFloat(remaining.toFixed(1)))
 
-        timerRef.current = { type: 'restartDelay', cleanup: () => clearInterval(updateInterval) }
-      } else {
-        // 继续等待枪声
-        setElapsedTime(Date.now() - sequenceStartTimeRef.current)
-        timerRef.current = { type: 'autoRestartWait', cleanup: () => {} }
-        requestAnimationFrame(checkRestart)
+      if (remaining <= 0) {
+        clearInterval(updateInterval)
+        // 重启序列
+        shotCountRef.current = 0
+        setShotCount(0)
+        // 保留历史记录，只重置计数
+        executeNodeRef.current(0)
       }
-    }
+    }, 100)
 
-    checkRestart()
-  }, [])
+    timerRef.current = { type: 'restartDelay', cleanup: () => clearInterval(updateInterval) }
+  }, [addNodeCompleteToHistory])
 
   // 开始执行
   const start = useCallback(() => {

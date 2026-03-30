@@ -30,7 +30,6 @@ export const defaultNodeConfigs = {
     stopOnTimeout: false // 到期后是否停止整个流程
   },
   [NodeType.AutoRestart]: {
-    shotCount: 5,        // 射击次数达到后重启
     delayBeforeRestart: 1000 // 重启前延迟（毫秒）
   },
   [NodeType.Beep]: {
@@ -89,7 +88,7 @@ export function getNodeDescription(type, config) {
     case NodeType.ParTime:
       return `${config.parTime}ms${config.stopOnTimeout ? ' (到期停止)' : ''}`
     case NodeType.AutoRestart:
-      return `${config.shotCount}发后重启，延迟${config.delayBeforeRestart}ms`
+      return `延迟${config.delayBeforeRestart}ms 后重启`
     case NodeType.Beep:
       return `${config.frequency}Hz, ${config.duration}ms`
     case NodeType.FixedDelay:

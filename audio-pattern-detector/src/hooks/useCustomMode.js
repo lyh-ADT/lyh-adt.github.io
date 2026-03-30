@@ -555,10 +555,10 @@ export function useCustomMode(nodes = [], options = {}) {
 
       if (remaining <= 0) {
         clearInterval(updateInterval)
-        // 重启序列
+        // 重启序列 - 清空所有记录
         shotCountRef.current = 0
         setShotCount(0)
-        // 保留历史记录，只重置计数
+        setShotHistory([])
         executeNodeRef.current(0)
       }
     }, 100)

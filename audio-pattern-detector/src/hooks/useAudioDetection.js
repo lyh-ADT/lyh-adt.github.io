@@ -39,7 +39,7 @@ export function useAudioDetection(initialConfig = {}) {
     maxDelay: configRef.current.maxDelay || 5,
     parTimeEnabled: configRef.current.parTimeEnabled ?? false,
     parTime: configRef.current.parTime || 30,
-    matchCooldown: 100
+    matchCooldown: 250  // 枪声检测冷却时间（毫秒），防止一次枪声多次触发
   }
 
   const audioState = useAudioState()

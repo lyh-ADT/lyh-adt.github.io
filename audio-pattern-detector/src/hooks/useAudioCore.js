@@ -408,7 +408,8 @@ export function useListeningActions(refs, config, audioState, detectMatch) {
     const audioCtx = audioContextRef.current
     const source = audioCtx.createMediaStreamSource(mediaStreamRef.current)
 
-    const scriptProcessor = audioCtx.createScriptProcessor(2048, 1, 1)
+    // 使用 512 采样点缓冲区（约 11.6ms @ 44.1kHz），降低检测延迟
+    const scriptProcessor = audioCtx.createScriptProcessor(512, 1, 1)
     scriptProcessorRef.current = scriptProcessor
 
     isListeningRef.current = true
@@ -550,7 +551,8 @@ export function useListeningActionsForShot(refs, config, audioState, detectShot)
     const audioCtx = audioContextRef.current
     const source = audioCtx.createMediaStreamSource(mediaStreamRef.current)
 
-    const scriptProcessor = audioCtx.createScriptProcessor(2048, 1, 1)
+    // 使用 512 采样点缓冲区（约 11.6ms @ 44.1kHz），降低检测延迟
+    const scriptProcessor = audioCtx.createScriptProcessor(512, 1, 1)
     scriptProcessorRef.current = scriptProcessor
 
     isListeningRef.current = true
@@ -734,12 +736,13 @@ export function useShotDetection(refs, config, audioState, playBeep, onShotDetec
       // 更新状态
       updateStatus(AppState.DETECTED)
 
+      // 200ms 后解锁检测 — 平衡单次枪声不重复触发和连发检测
       setTimeout(() => {
         if (stateRef.current === AppState.DETECTED) {
           updateStatus(AppState.TIMING)
         }
         isDetectingRef.current = false
-      }, 300)
+      }, 200)
 
       // 调用外部回调
       if (onShotDetectedRef.current) {

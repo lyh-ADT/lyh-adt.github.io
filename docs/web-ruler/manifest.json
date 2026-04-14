@@ -1,0 +1,9 @@
+{
+  "name": "Web Ruler",
+  "short_name": "Ruler",
+  "description": "\u7f51\u9875\u76f4\u5c3a\u5de5\u5177",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000"
+}

@@ -32,10 +32,6 @@ function App() {
     setShowCalibration(false)
   }, [])
 
-  const pxPerUnit = unit === 'cm' ? (dpi / 2.54) : dpi
-  const widthInUnit = Math.round(screenSize.width / pxPerUnit * 10) / 10
-  const heightInUnit = Math.round(screenSize.height / pxPerUnit * 10) / 10
-
   return (
     <div className="app">
       <Ruler
@@ -67,10 +63,6 @@ function App() {
         )}
       </div>
 
-      {/* 尺寸显示 */}
-      <div className="measurement-display">
-        {screenSize.width} × {screenSize.height} px | {widthInUnit} × {heightInUnit} {unit}
-      </div>
 
       {showCalibration && (
         <CalibrationModal

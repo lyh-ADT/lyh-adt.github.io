@@ -1,121 +1,144 @@
 import './Ruler.css'
 
 const CM_PER_INCH = 2.54
-const TICK_MAJOR = 10  // mm
-const TICK_MEDIUM = 5
-const TICK_MINOR = 1
 
-function Ruler({ position, unit, dpi, opacity, screenWidth, screenHeight }) {
-  const isHorizontal = position === 'top' || position === 'bottom'
-  const length = isHorizontal ? screenWidth : screenHeight
-  
-  const pxPerUnit = unit === 'cm' 
-    ? (dpi / CM_PER_INCH) 
+function Ruler({ unit, dpi, opacity, screenWidth, screenHeight }) {
+  const pxPerUnit = unit === 'cm'
+    ? (dpi / CM_PER_INCH)
     : dpi
 
-  const displayLength = Math.round(length / pxPerUnit * 10) / 10
+  const mmPerUnit = unit === 'cm' ? 10 : 25.4
 
-  const renderTicks = () => {
+  const renderTicksForEdge = (position) => {
+    const length = position === 'top' || position === 'bottom' ? screenWidth : screenHeight
     const ticks = []
-    const mmPerUnit = unit === 'cm' ? 10 : 25.4
-    const totalMm = (length / pxPerUnit) * mmPerUnit
-    
-    for (let mm = 0; mm <= totalMm; mm++) {
-      const px = (mm / mmPerUnit) * pxPerUnit
-      let tickHeight = 8
-      let showLabel = false
-      let label = ''
 
-      if (mm % TICK_MAJOR === 0 && mm !== 0) {
-        tickHeight = 30
-        showLabel = true
-        if (unit === 'cm') {
-          label = (mm / 10).toFixed(1)
-        } else if (unit === 'inch') {
-          label = (mm / 25.4).toFixed(2)
+    if (unit === 'px') {
+      // Iterate over pixels directly
+      for (let px = 1; px <= length; px++) {
+        let tickHeight
+        let showLabel = false
+        let label = ''
+
+        if (px % 100 === 0) {
+          tickHeight = 30
+          showLabel = true
+          label = px.toString()
+        } else if (px % 50 === 0) {
+          tickHeight = 20
         } else {
-          label = Math.round(px)
+          tickHeight = 10
         }
-      } else if (mm % TICK_MEDIUM === 0) {
-        tickHeight = 20
-      } else {
-        tickHeight = 10
-      }
 
-      if (isHorizontal) {
-        const yPos = position === 'top' ? 0 : '100%'
-        const tickDirection = position === 'top' ? 1 : -1
-        
-        ticks.push(
-          <g key={mm}>
-            <line
-              x1={px}
-              y1={position === 'top' ? 0 : 60}
-              x2={px}
-              y2={position === 'top' ? tickHeight : 60 - tickHeight}
-              stroke="#000"
-              strokeWidth="1.5"
-            />
-            {showLabel && (
-              <text
-                x={px + 4}
-                y={position === 'top' ? tickHeight + 14 : 60 - tickHeight - 6}
-                fontSize="12"
-                fontWeight="600"
-                fill="#000"
-                style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}
-              >
-                {label}
-              </text>
-            )}
-          </g>
-        )
-      } else {
-        ticks.push(
-          <g key={mm}>
-            <line
-              x1={position === 'left' ? 60 : 0}
-              y1={px}
-              x2={position === 'left' ? 60 - tickHeight : tickHeight}
-              y2={px}
-              stroke="#000"
-              strokeWidth="1.5"
-            />
-            {showLabel && (
-              <text
-                x={position === 'left' ? 60 - tickHeight - 4 : tickHeight + 4}
-                y={px + 4}
-                fontSize="12"
-                fontWeight="600"
-                fill="#000"
-                textAnchor={position === 'left' ? 'end' : 'start'}
-                style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}
-              >
-                {label}
-              </text>
-            )}
-          </g>
-        )
+        const tick = (position) => {
+          switch (position) {
+            case 'top':
+              return (
+                <line x1={px} y1="0" x2={px} y2={tickHeight} stroke="#000" strokeWidth="1.5" />
+              )
+            case 'bottom':
+              return (
+                <line x1={px} y1={screenHeight} x2={px} y2={screenHeight - tickHeight} stroke="#000" strokeWidth="1.5" />
+              )
+            case 'left':
+              return (
+                <line x1="0" y1={px} x2={tickHeight} y2={px} stroke="#000" strokeWidth="1.5" />
+              )
+            case 'right':
+              return (
+                <line x1={screenWidth} y1={px} x2={screenWidth - tickHeight} y2={px} stroke="#000" strokeWidth="1.5" />
+              )
+          }
+        }
+
+        const lbl = (position) => {
+          if (!showLabel) return null
+          switch (position) {
+            case 'top':
+              return <text x={px + 4} y={tickHeight + 14} fontSize="12" fontWeight="600" fill="#000" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+            case 'bottom':
+              return <text x={px - 4} y={screenHeight - tickHeight - 6} fontSize="12" fontWeight="600" fill="#000" textAnchor="end" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+            case 'left':
+              return <text x={tickHeight + 4} y={px + 4} fontSize="12" fontWeight="600" fill="#000" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+            case 'right':
+              return <text x={screenWidth - tickHeight - 4} y={px + 4} fontSize="12" fontWeight="600" fill="#000" textAnchor="end" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+          }
+        }
+
+        ticks.push(<g key={`tick-${position}-${px}`}>{tick(position)}{lbl(position)}</g>)
+      }
+    } else {
+      // cm or inch: iterate over millimeters
+      const totalMm = (length / pxPerUnit) * mmPerUnit
+
+      for (let mm = 1; mm <= totalMm; mm++) {
+        const px = (mm / mmPerUnit) * pxPerUnit
+        let tickHeight
+        let showLabel = false
+        let label = ''
+
+        if (mm % mmPerUnit === 0) {
+          tickHeight = 30
+          showLabel = true
+          label = unit === 'cm' ? (mm / 10).toFixed(1) : (mm / 25.4).toFixed(2)
+        } else if (mm % (mmPerUnit / 2) === 0) {
+          tickHeight = 20
+        } else {
+          tickHeight = 10
+        }
+
+        const tick = (position) => {
+          switch (position) {
+            case 'top':
+              return <line x1={px} y1="0" x2={px} y2={tickHeight} stroke="#000" strokeWidth="1.5" />
+            case 'bottom':
+              return <line x1={px} y1={screenHeight} x2={px} y2={screenHeight - tickHeight} stroke="#000" strokeWidth="1.5" />
+            case 'left':
+              return <line x1="0" y1={px} x2={tickHeight} y2={px} stroke="#000" strokeWidth="1.5" />
+            case 'right':
+              return <line x1={screenWidth} y1={px} x2={screenWidth - tickHeight} y2={px} stroke="#000" strokeWidth="1.5" />
+          }
+        }
+
+        const lbl = (position) => {
+          if (!showLabel) return null
+          switch (position) {
+            case 'top':
+              return <text x={px + 4} y={tickHeight + 14} fontSize="12" fontWeight="600" fill="#000" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+            case 'bottom':
+              return <text x={px - 4} y={screenHeight - tickHeight - 6} fontSize="12" fontWeight="600" fill="#000" textAnchor="end" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+            case 'left':
+              return <text x={tickHeight + 4} y={px + 4} fontSize="12" fontWeight="600" fill="#000" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+            case 'right':
+              return <text x={screenWidth - tickHeight - 4} y={px + 4} fontSize="12" fontWeight="600" fill="#000" textAnchor="end" style={{ textShadow: '0 0 2px rgba(255,255,255,0.8)' }}>{label}</text>
+          }
+        }
+
+        ticks.push(<g key={`tick-${position}-${mm}`}>{tick(position)}{lbl(position)}</g>)
       }
     }
+
     return ticks
   }
 
   return (
-    <div
-      className={`ruler ruler-full ${position}`}
+    <svg
+      className="ruler-edge"
+      viewBox={`0 0 ${screenWidth} ${screenHeight}`}
       style={{ opacity }}
     >
-      <svg 
-        width={isHorizontal ? '100%' : '60px'} 
-        height={isHorizontal ? '60px' : '100%'}
-      >
-        {renderTicks()}
-      </svg>
-      <div className={`ruler-label ${position}`}>
-        {displayLength} {unit}
-      </div>
-    </div>
+      {/* Edge lines */}
+      <line x1="0" y1="0" x2={screenWidth} y2="0" stroke="#000" strokeWidth="1.5" />
+      <line x1="0" y1={screenHeight} x2={screenWidth} y2={screenHeight} stroke="#000" strokeWidth="1.5" />
+      <line x1="0" y1="0" x2="0" y2={screenHeight} stroke="#000" strokeWidth="1.5" />
+      <line x1={screenWidth} y1="0" x2={screenWidth} y2={screenHeight} stroke="#000" strokeWidth="1.5" />
+
+      {/* Ticks on all four edges */}
+      {renderTicksForEdge('top')}
+      {renderTicksForEdge('bottom')}
+      {renderTicksForEdge('left')}
+      {renderTicksForEdge('right')}
+    </svg>
   )
 }
 

@@ -1,6 +1,6 @@
 import './Controls.css'
 
-function Controls({ unit, setUnit, dpi, orientation, setOrientation, opacity, setOpacity, onCalibrate }) {
+function Controls({ unit, setUnit, dpi, opacity, setOpacity, onCalibrate }) {
   return (
     <div className="controls">
       <div className="control-section">
@@ -9,14 +9,6 @@ function Controls({ unit, setUnit, dpi, orientation, setOrientation, opacity, se
           <button className={unit === 'cm' ? 'active' : ''} onClick={() => setUnit('cm')}>cm</button>
           <button className={unit === 'inch' ? 'active' : ''} onClick={() => setUnit('inch')}>inch</button>
           <button className={unit === 'px' ? 'active' : ''} onClick={() => setUnit('px')}>px</button>
-        </div>
-      </div>
-
-      <div className="control-section">
-        <span className="control-label">方向:</span>
-        <div className="btn-group">
-          <button className={orientation === 'horizontal' ? 'active' : ''} onClick={() => setOrientation('horizontal')}>横</button>
-          <button className={orientation === 'vertical' ? 'active' : ''} onClick={() => setOrientation('vertical')}>竖</button>
         </div>
       </div>
 

@@ -30,7 +30,7 @@ const DEFAULT_CONTENT = `# 欢迎使用 Markdown Editor
 
 ## 特性
 
-- 实时渲染（后续升级 Typora IR 模式）
+- Typora 风格实时渲染（光标所在行显示 Markdown 语法）
 - 代码块、表格、任务列表
 - IndexedDB 自动保存 + 本地文件读写
 

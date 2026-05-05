@@ -23,17 +23,83 @@ function pickFilename(doc: Doc): string {
   return `${safe || '未命名'}.md`;
 }
 
+/**
+ * 用传统 <input type="file"> 读取本地 Markdown 文件（FS Access API 不可用时的兜底方案）。
+ * 返回解析出的文件名和内容；用户取消返回 null。
+ */
+function openMarkdownFileLegacy(): Promise<{ filename: string; content: string } | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    const cleanup = () => {
+      input.remove();
+    };
+
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) {
+        cleanup();
+        resolve(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        cleanup();
+        const content = typeof reader.result === 'string' ? reader.result : '';
+        resolve({ filename: file.name, content });
+      };
+      reader.onerror = () => {
+        cleanup();
+        resolve(null);
+      };
+      reader.readAsText(file, 'UTF-8');
+    };
+
+    // 用户点了取消（对话框关闭但没有选中文件）
+    input.oncancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    // 兜底：focus 丢失且无 change 视为取消
+    const onFocus = () => {
+      window.removeEventListener('focus', onFocus);
+      setTimeout(() => {
+        if (!input.files?.length) {
+          cleanup();
+          resolve(null);
+        }
+      }, 500);
+    };
+    window.addEventListener('focus', onFocus);
+
+    input.click();
+  });
+}
+
 export function useFileSystem() {
   const store = useDocStore();
   const supported = computed(() => isFileSystemAccessSupported());
 
   /**
-   * 打开本地 .md 文件：创建新文档并绑定 fileHandle。
-   * 浏览器不支持时报错。
+   * 打开本地 .md 文件：优先使用 File System Access API，不支持时回退到 <input type="file">。
    */
   async function openLocalFile(): Promise<void> {
-    const opened = await openMarkdownFile();
-    if (!opened) return;
+    let opened: { filename: string; content: string; handle?: FileSystemFileHandle } | null;
+
+    if (supported.value) {
+      const result = await openMarkdownFile();
+      if (!result) return;
+      opened = result;
+    } else {
+      const result = await openMarkdownFileLegacy();
+      if (!result) return;
+      opened = result;
+    }
 
     const now = Date.now();
     const doc: Doc = {
@@ -42,6 +108,7 @@ export function useFileSystem() {
       content: opened.content,
       createdAt: now,
       updatedAt: now,
+      // legacy 兜底没有 fileHandle，仅 IndexedDB 保存
       fileHandle: opened.handle,
     };
     await indexedDBAdapter.save(doc);

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useCustomMode, ExecutionState, CurrentNodeType } from '../../hooks/useCustomMode'
-import { NodeType, getNodeDisplayName, getNodeIcon } from '../../types/index.js'
+import { useCustomMode, CurrentNodeType } from '../../hooks/useCustomMode'
+import { getNodeDisplayName, getNodeIcon } from '../../types/index.js'
 import CustomModeEditor from '../CustomModeEditor'
 import './CustomModePage.css'
 
@@ -109,6 +109,7 @@ function CustomModePage() {
   // 使用自定义模式 Hook
   const {
     executionState,
+    error,
     currentNodeIndex,
     currentNodeType,
     countdown,
@@ -120,22 +121,12 @@ function CustomModePage() {
     start,
     stop,
     isRunning,
-    isPaused,
     isStopped,
     isCompleted,
     isIdle
   } = useCustomMode(nodes, {
     defaultThreshold: 0.7,
-    defaultBeepEnabled: true,
-    onNodeStart: (data) => {
-      console.log('节点开始:', data)
-    },
-    onNodeComplete: (data) => {
-      console.log('节点完成:', data)
-    },
-    onSequenceComplete: (data) => {
-      console.log('序列完成:', data)
-    }
+    defaultBeepEnabled: true
   })
 
   const canvasRef = useRef(null)
@@ -193,16 +184,16 @@ function CustomModePage() {
 
   // 获取当前状态信息
   const getStatusInfo = () => {
+    if (error) {
+      return { indicator: 'ready', text: error }
+    }
+
     if (isIdle) {
       return { indicator: 'ready', text: '准备就绪 - 请添加节点并开始' }
     }
 
     if (isCompleted) {
       return { indicator: 'ready', text: '序列完成' }
-    }
-
-    if (isPaused) {
-      return { indicator: 'waiting', text: '已暂停' }
     }
 
     if (isStopped) {
@@ -294,7 +285,7 @@ function CustomModePage() {
           </div>
 
           {/* 当前节点进度 */}
-          {currentNode && (isRunning || isPaused) && (
+          {currentNode && isRunning && (
             <div className="current-node-card">
               <span className="node-progress-label">当前节点</span>
               <div className="node-progress-info">
@@ -326,22 +317,6 @@ function CustomModePage() {
               />
             )}
 
-            {isPaused && (
-              <>
-                <ControlButton
-                  onClick={start}
-                  variant="primary"
-                  icon="▶️"
-                  label="继续"
-                />
-                <ControlButton
-                  onClick={stop}
-                  variant="danger"
-                  icon="⏹️"
-                  label="停止"
-                />
-              </>
-            )}
           </div>
 
           <Visualizer canvasRef={canvasRef} />
@@ -356,7 +331,7 @@ function CustomModePage() {
           <CustomModeEditor
             nodes={nodes}
             onNodesChange={setNodes}
-            disabled={isRunning || isPaused}
+            disabled={isRunning}
           />
         </div>
       </div>

@@ -3,7 +3,7 @@
   padding: 20px;
 }
 
-.random-delay-beep-layout {
+.random-delay-beep-page .random-delay-beep-layout {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -11,7 +11,7 @@
 }
 
 @media (min-width: 1400px) {
-  .random-delay-beep-layout {
+  .random-delay-beep-page .random-delay-beep-layout {
     flex-direction: row;
     align-items: flex-start;
     flex-wrap: nowrap;
@@ -21,16 +21,16 @@
     width: 100%;
   }
 
-  .random-delay-beep-layout .container {
+  .random-delay-beep-page .random-delay-beep-layout .container {
     flex: 2;
     min-width: 0;
     width: 100%;
     max-width: none;
   }
 
-  .random-delay-beep-layout .stats-card,
-  .random-delay-beep-layout .settings-card,
-  .random-delay-beep-layout .history-card {
+  .random-delay-beep-page .random-delay-beep-layout .stats-card,
+  .random-delay-beep-page .random-delay-beep-layout .settings-card,
+  .random-delay-beep-page .random-delay-beep-layout .history-card {
     flex: 1;
     min-width: 0;
     width: 100%;
@@ -67,7 +67,7 @@
 }
 
 /* 状态卡片 */
-.status-card {
+.random-delay-beep-page .status-card {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 10px;
   padding: 15px;
@@ -78,59 +78,59 @@
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.status-card.waiting {
+.random-delay-beep-page .status-card.waiting {
   background: rgba(255, 152, 0, 0.15);
   border-color: rgba(255, 152, 0, 0.3);
 }
 
-.status-card.idle {
+.random-delay-beep-page .status-card.idle {
   background: rgba(0, 170, 0, 0.1);
   border-color: rgba(0, 170, 0, 0.2);
 }
 
-.status-card.timing {
+.random-delay-beep-page .status-card.timing {
   background: rgba(102, 126, 234, 0.15);
   border-color: rgba(102, 126, 234, 0.3);
 }
 
-.status-indicator {
+.random-delay-beep-page .status-indicator {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.indicator-icon {
+.random-delay-beep-page .indicator-icon {
   font-size: 1.2rem;
 }
 
-.waiting-icon {
-  animation: pulse 0.5s infinite;
+.random-delay-beep-page .waiting-icon {
+  animation: pulse-random 0.5s infinite;
 }
 
-.timing-icon {
-  animation: pulse 0.3s infinite;
+.random-delay-beep-page .timing-icon {
+  animation: pulse-random 0.3s infinite;
 }
 
-@keyframes pulse {
+@keyframes pulse-random {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
 
-.status-text {
+.random-delay-beep-page .status-text {
   flex: 1;
   font-size: 0.95rem;
   font-weight: 500;
   color: #333;
 }
 
-.status-text.timer-display {
+.random-delay-beep-page .status-text.timer-display {
   font-family: 'Courier New', monospace;
   font-size: 1.5rem;
   font-weight: 700;
   color: #667eea;
 }
 
-.status-countdown {
+.random-delay-beep-page .status-countdown {
   font-size: 0.85rem;
   color: rgba(0, 0, 0, 0.6);
   background: rgba(255, 152, 0, 0.2);
@@ -140,22 +140,22 @@
   font-weight: 500;
 }
 
-.status-card.timing .timer-display {
+.random-delay-beep-page .status-card.timing .timer-display {
   color: #667eea;
 }
 
-.status-card.idle .timer-display {
+.random-delay-beep-page .status-card.idle .timer-display {
   color: #00aa00;
 }
 
 /* 控制按钮 */
-.controls {
+.random-delay-beep-page .controls {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
 }
 
-.btn {
+.random-delay-beep-page .btn {
   flex: 1;
   padding: 15px 20px;
   border: none;
@@ -170,35 +170,35 @@
   gap: 8px;
 }
 
-.btn:disabled {
+.random-delay-beep-page .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.btn-primary {
+.random-delay-beep-page .btn-primary {
   background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
   color: white;
 }
 
-.btn-primary:not(:disabled):hover {
+.random-delay-beep-page .btn-primary:not(:disabled):hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(255, 152, 0, 0.5);
 }
 
-.btn-danger {
+.random-delay-beep-page .btn-danger {
   background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
   color: white;
   font-size: 1.1rem;
   padding: 18px 24px;
 }
 
-.btn-danger:not(:disabled):hover {
+.random-delay-beep-page .btn-danger:not(:disabled):hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(244, 67, 54, 0.5);
 }
 
 /* 设置卡片 */
-.settings-card {
+.random-delay-beep-page .settings-card {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
   border-radius: 20px;
@@ -210,14 +210,14 @@
   margin-top: 20px;
 }
 
-.settings-card h2 {
+.random-delay-beep-page .settings-card h2 {
   font-size: 1rem;
   margin-bottom: 15px;
   color: rgba(0, 0, 0, 0.7);
   font-weight: 600;
 }
 
-.setting-item {
+.random-delay-beep-page .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -225,17 +225,17 @@
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.setting-item:last-child {
+.random-delay-beep-page .setting-item:last-child {
   border-bottom: none;
 }
 
-.setting-item label {
+.random-delay-beep-page .setting-item label {
   font-size: 0.85rem;
   color: rgba(0, 0, 0, 0.7);
   font-weight: 500;
 }
 
-.setting-item input[type="number"] {
+.random-delay-beep-page .setting-item input[type="number"] {
   width: 80px;
   padding: 8px;
   border: none;
@@ -246,20 +246,20 @@
   font-size: 0.9rem;
 }
 
-.setting-item input[type="checkbox"] {
+.random-delay-beep-page .setting-item input[type="checkbox"] {
   width: 20px;
   height: 20px;
   cursor: pointer;
   accent-color: #ff9800;
 }
 
-.setting-item input:disabled {
+.random-delay-beep-page .setting-item input:disabled {
   background: rgba(0, 0, 0, 0.1);
   cursor: not-allowed;
 }
 
 /* 统计卡片 */
-.stats-card {
+.random-delay-beep-page .stats-card {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
   border-radius: 20px;
@@ -271,13 +271,13 @@
   margin-top: 20px;
 }
 
-.stats-grid {
+.random-delay-beep-page .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 15px;
 }
 
-.stat-item {
+.random-delay-beep-page .stat-item {
   background: rgba(255, 152, 0, 0.08);
   border-radius: 10px;
   padding: 15px;
@@ -285,14 +285,14 @@
   border: 1px solid rgba(255, 152, 0, 0.15);
 }
 
-.stat-label {
+.random-delay-beep-page .stat-label {
   display: block;
   color: rgba(0, 0, 0, 0.5);
   font-size: 0.8rem;
   margin-bottom: 5px;
 }
 
-.stat-value {
+.random-delay-beep-page .stat-value {
   display: block;
   color: #ff9800;
   font-size: 1.8rem;
@@ -300,7 +300,7 @@
 }
 
 /* 历史记录 */
-.history-card {
+.random-delay-beep-page .history-card {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
   border-radius: 20px;
@@ -312,14 +312,14 @@
   margin-top: 20px;
 }
 
-.history-card h2 {
+.random-delay-beep-page .history-card h2 {
   font-size: 1rem;
   margin-bottom: 15px;
   color: rgba(0, 0, 0, 0.7);
   font-weight: 600;
 }
 
-.history-list {
+.random-delay-beep-page .history-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -327,7 +327,7 @@
   overflow-y: auto;
 }
 
-.history-item {
+.random-delay-beep-page .history-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -337,13 +337,13 @@
   border-left: 3px solid rgba(255, 152, 0, 0.4);
 }
 
-.history-time {
+.random-delay-beep-page .history-time {
   color: rgba(0, 0, 0, 0.6);
   font-weight: 500;
   font-size: 0.85rem;
 }
 
-.history-delay {
+.random-delay-beep-page .history-delay {
   color: #ff9800;
   font-weight: 600;
   font-size: 1rem;
@@ -352,16 +352,16 @@
 }
 
 /* 滚动条 */
-.history-list::-webkit-scrollbar {
+.random-delay-beep-page .history-list::-webkit-scrollbar {
   width: 6px;
 }
 
-.history-list::-webkit-scrollbar-track {
+.random-delay-beep-page .history-list::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.1);
   border-radius: 3px;
 }
 
-.history-list::-webkit-scrollbar-thumb {
+.random-delay-beep-page .history-list::-webkit-scrollbar-thumb {
   background: rgba(255, 152, 0, 0.4);
   border-radius: 3px;
 }
@@ -373,23 +373,23 @@
   }
 
   .random-delay-beep-page .container,
-  .settings-card,
-  .stats-card,
-  .history-card {
+  .random-delay-beep-page .settings-card,
+  .random-delay-beep-page .stats-card,
+  .random-delay-beep-page .history-card {
     width: 100%;
     max-width: none;
     padding: 20px;
   }
 
-  .controls {
+  .random-delay-beep-page .controls {
     flex-direction: column;
   }
 
-  .btn {
+  .random-delay-beep-page .btn {
     width: 100%;
   }
 
-  .stats-grid {
+  .random-delay-beep-page .stats-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -399,12 +399,12 @@
     font-size: 1.4rem;
   }
 
-  .btn {
+  .random-delay-beep-page .btn {
     padding: 12px 16px;
     font-size: 0.9rem;
   }
 
-  .stat-value {
+  .random-delay-beep-page .stat-value {
     font-size: 1.4rem;
   }
 }

@@ -1,6 +1,6 @@
 /**
- * Shot Timer 自定义 Hook
- * 检测枪声并记录射击间隔时间
+ * Shot Timer Hook
+ * 检测枪声、维护总计时、Par Time 和自动重启。
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -18,59 +18,78 @@ import { useRandomDelayAction } from './useRandomDelay'
 
 export { AppState }
 
+const MATCH_COOLDOWN_MS = 80
+const REFRACTORY_MS = 60
+const DETECTION_WINDOW_SIZE = 512
+const START_GUARD_MS = 180
+const AUTO_RESTART_DELAY_MS = 1000
+
 /**
  * Shot Timer Hook
- * @param {Object} initialConfig - 初始配置
- * @returns {Object} Shot Timer 的状态和方法
  */
 export function useAudioDetection(initialConfig = {}) {
-  // 使用 refs 存储动态配置，避免每次渲染创建新对象
   const configRef = useRef(initialConfig)
   configRef.current = initialConfig
 
   const config = {
-    recordDuration: configRef.current.recordDuration || 3,
-    threshold: configRef.current.threshold || 0.6,
+    threshold: configRef.current.threshold ?? 0.7,
     beepEnabled: configRef.current.beepEnabled ?? true,
     shotBeepEnabled: configRef.current.shotBeepEnabled ?? true,
     autoRestartEnabled: configRef.current.autoRestartEnabled ?? false,
-    autoRestartLimit: configRef.current.autoRestartLimit || 5,
-    minDelay: configRef.current.minDelay || 1,
-    maxDelay: configRef.current.maxDelay || 5,
+    autoRestartLimit: configRef.current.autoRestartLimit ?? 5,
+    minDelay: configRef.current.minDelay ?? 1,
+    maxDelay: configRef.current.maxDelay ?? 5,
     parTimeEnabled: configRef.current.parTimeEnabled ?? false,
-    parTime: configRef.current.parTime || 30,
-    matchCooldown: 250  // 枪声检测冷却时间（毫秒），防止一次枪声多次触发
+    parTime: configRef.current.parTime ?? 1000
   }
 
   const audioState = useAudioState()
-  const refs = useAudioRefsWithExtensions()
-  const playBeep = useBeep(config.beepEnabled ?? true)
-  const playShotBeep = useBeep(config.shotBeepEnabled ?? true)
+  const coreRefs = useAudioCoreRefs()
+  const shotCountRef = useRef(0)
+  const refs = { ...coreRefs, shotCountRef }
 
-  // 创建枪声检测 Hook
-  const { detectShot } = useShotDetection(refs, config, audioState, playShotBeep)
+  const playStartBeep = useBeep(config.beepEnabled, { duration: 120, volume: 0.4 })
+  const playShotBeep = useBeep(true, { duration: 50, volume: 0.35 })
 
-  // 创建监听操作 Hook（Shot Timer 专用）
-  const {
-    startListening,
-    stopListening
-  } = useListeningActionsForShot(refs, config, audioState, detectShot)
+  const playStartBeepRef = useRef(playStartBeep)
+  useEffect(() => {
+    playStartBeepRef.current = playStartBeep
+  }, [playStartBeep])
 
-  // 状态信息 Hook
-  const { getStatusInfo } = useStatusInfo(audioState, refs)
+  // 检测配置放在 ref 中，修改设置后无需重新启动监听即可生效。
+  const shotConfigRef = useRef({})
+  shotConfigRef.current = {
+    threshold: config.threshold,
+    beepEnabled: config.shotBeepEnabled,
+    matchCooldown: MATCH_COOLDOWN_MS,
+    refractoryMs: REFRACTORY_MS,
+    windowSize: DETECTION_WINDOW_SIZE,
+    manageStats: true,
+    detectedHoldMs: 200
+  }
 
-  // 清理 Hook
+  const { detectShot } = useShotDetection(
+    refs,
+    shotConfigRef,
+    audioState,
+    playShotBeep
+  )
+
+  const { startListening, stopListening } = useListeningActionsForShot(
+    refs,
+    audioState,
+    detectShot
+  )
+
+  const { getStatusInfo } = useStatusInfo(audioState)
+
   useCleanup(refs)
 
-  // 随机延迟 Hook（使用 refs 来存储动态变化的延迟参数）
-  const minDelayRef = useRef(config.minDelay || 1)
-  const maxDelayRef = useRef(config.maxDelay || 5)
-  minDelayRef.current = config.minDelay || 1
-  maxDelayRef.current = config.maxDelay || 5
-
-  // 使用 ref 存储 startRandomDelay，避免依赖变化
-  const startRandomDelayRef = useRef(null)
-  const cancelDelayRef = useRef(null)
+  // 随机延迟
+  const startListeningRef = useRef(startListening)
+  useEffect(() => {
+    startListeningRef.current = startListening
+  }, [startListening])
 
   const {
     isWaiting: isWaitingForRandomDelay,
@@ -78,235 +97,292 @@ export function useAudioDetection(initialConfig = {}) {
     startDelay: startRandomDelayInternal,
     cancelDelay: cancelDelayInternal
   } = useRandomDelayAction(() => {
-    // 随机延迟完成，播放 Beep 并开始监听和计时
-    playBeep()
-    startListening()
+    playStartBeepRef.current?.()
+    startListeningRef.current?.({ guardMs: START_GUARD_MS })
   }, {
-    minDelay: minDelayRef.current * 1000,
-    maxDelay: maxDelayRef.current * 1000
+    minDelay: config.minDelay * 1000,
+    maxDelay: config.maxDelay * 1000
   })
 
-  // 保存函数到 ref
+  const startRandomDelayRef = useRef(startRandomDelayInternal)
+  const cancelDelayRef = useRef(cancelDelayInternal)
   startRandomDelayRef.current = startRandomDelayInternal
   cancelDelayRef.current = cancelDelayInternal
 
-  // 开始随机延迟监听
-  const startListeningWithRandomDelay = useCallback(() => {
-    // 清除上次的计时结果
-    audioState.setShotCount(0)
-    audioState.setShotHistory([])
-    audioState.setCurrentShotTime(0)
-    startRandomDelayRef.current()
-  }, [audioState])
-
-  // 计时器状态
+  // 计时状态
   const [elapsedTime, setElapsedTime] = useState(0)
   const [parTimeRemaining, setParTimeRemaining] = useState(null)
   const [isInfiniteLoop, setIsInfiniteLoop] = useState(false)
+
   const timerRef = useRef(null)
-  const parTimeTimerRef = useRef(null)
-  const startTimeRef = useRef(0)
-  const parTimeStartTimeRef = useRef(0)
-  const listeningStateRef = useRef(false)
-  const hasRecordedFinalTimeRef = useRef(false)
+  const restartTimerRef = useRef(null)
+  const sessionStartTimeRef = useRef(0)
+  const parTimeFiredRef = useRef(false)
+  const autoRestartCheckedRef = useRef(false)
 
-  // 计时器更新
+  // 总计时 + Par Time。DETECTED/TIMING 都属于同一次计时 session，
+  // 只有回到 IDLE 后才重置 session 起点。
   useEffect(() => {
-    const isListening = audioState.state === AppState.LISTENING || audioState.state === AppState.TIMING
+    const active =
+      audioState.state === AppState.LISTENING ||
+      audioState.state === AppState.DETECTED ||
+      audioState.state === AppState.TIMING
 
-    if (isListening && !listeningStateRef.current) {
-      // 刚开始监听，重置 startTime
-      startTimeRef.current = Date.now()
-      setElapsedTime(0)
-      hasRecordedFinalTimeRef.current = false
-    }
-    listeningStateRef.current = isListening
-
-    if (isListening) {
-      const animate = () => {
-        setElapsedTime(Date.now() - startTimeRef.current)
-        timerRef.current = requestAnimationFrame(animate)
-      }
-      timerRef.current = requestAnimationFrame(animate)
-    }
-
-    return () => {
-      if (timerRef.current) {
-        cancelAnimationFrame(timerRef.current)
-      }
-    }
-  }, [audioState.state])
-
-  // Par Time 计时器逻辑
-  const parTimeEnabledRef = useRef(false)
-  useEffect(() => {
-    const isListening = audioState.state === AppState.LISTENING || audioState.state === AppState.TIMING
-
-    if (config.parTimeEnabled && config.parTime && isListening) {
-      // 只在刚开始监听时设置 Par Time 开始时间
-      if (!parTimeEnabledRef.current) {
-        parTimeEnabledRef.current = true
-        parTimeStartTimeRef.current = Date.now()
-        setParTimeRemaining(config.parTime)
-        // 如果同时启用了自动重启，则标记为无限循环模式
-        if (config.autoRestartEnabled) {
-          setIsInfiniteLoop(true)
+    if (!active) {
+      if (audioState.state === AppState.IDLE) {
+        if (timerRef.current) {
+          cancelAnimationFrame(timerRef.current)
+          timerRef.current = null
         }
+        sessionStartTimeRef.current = 0
+        parTimeFiredRef.current = false
+        setElapsedTime(0)
+        setParTimeRemaining(null)
       }
+      return
+    }
 
-      const updateParTimeCountdown = () => {
-        const elapsed = Date.now() - parTimeStartTimeRef.current
-        const remaining = Math.max(0, Math.floor(config.parTime - elapsed))
+    if (!sessionStartTimeRef.current) {
+      sessionStartTimeRef.current = Date.now()
+      parTimeFiredRef.current = false
+      setElapsedTime(0)
+    }
+
+    const tick = () => {
+      const now = Date.now()
+      setElapsedTime(now - sessionStartTimeRef.current)
+
+      if (config.parTimeEnabled && config.parTime > 0) {
+        const remaining = Math.max(0, config.parTime - (now - sessionStartTimeRef.current))
         setParTimeRemaining(remaining)
 
-        if (elapsed >= config.parTime) {
-          // 到达 par time，停止计时并发出提示音
+        if (remaining <= 0 && !parTimeFiredRef.current) {
+          parTimeFiredRef.current = true
           setParTimeRemaining(null)
-          if (config.beepEnabled) {
-            playBeep()
-          }
-          // 保存当前计时结果
-          const finalTime = Date.now() - startTimeRef.current
-          const now = new Date()
-          const timeStr = now.toLocaleTimeString()
 
+          if (config.beepEnabled) {
+            playStartBeepRef.current?.()
+          }
+
+          const finalTime = now - sessionStartTimeRef.current
           audioState.setShotHistory(prev => [{
-            time: timeStr,
-            id: Date.now(),
+            time: new Date().toLocaleTimeString(),
+            id: now,
             timeSinceStart: finalTime,
             timeSinceLastMatch: finalTime,
-            shotNumber: audioState.shotCount + 1,
+            shotNumber: shotCountRef.current + 1,
             timeout: true,
             totalTime: true
           }, ...prev.slice(0, 18)])
 
-          setElapsedTime(0)
-          stopListening()
-          parTimeEnabledRef.current = false
-
-          // 如果自动重启开关打开，则自动重启
           if (config.autoRestartEnabled) {
-            // 重置计数
-            audioState.setShotCount(0)
-            audioState.setShotHistory(prev => prev.slice(0, 19)) // 保留刚保存的记录
-            audioState.setCurrentShotTime(0)
-            refs.shotCountRef.current = 0
-
-            // 1 秒后随机延迟重启
-            setTimeout(() => {
-              startTimeRef.current = Date.now()
-              setElapsedTime(0)
-              if (startRandomDelayRef.current) {
-                startRandomDelayRef.current()
-              }
-            }, 1000)
+            setIsInfiniteLoop(true)
+            stopListening()
+            if (restartTimerRef.current) {
+              clearTimeout(restartTimerRef.current)
+            }
+            restartTimerRef.current = setTimeout(() => {
+              restartTimerRef.current = null
+              startRandomDelayRef.current?.()
+            }, AUTO_RESTART_DELAY_MS)
           } else {
-            // 只有在非自动重启时才设置为 false
+            stopListening()
             setIsInfiniteLoop(false)
           }
-        } else {
-          parTimeTimerRef.current = requestAnimationFrame(updateParTimeCountdown)
+
+          timerRef.current = null
+          return
         }
+      } else {
+        setParTimeRemaining(null)
       }
 
-      updateParTimeCountdown()
-
-      return () => {
-        if (parTimeTimerRef.current) {
-          cancelAnimationFrame(parTimeTimerRef.current)
-        }
-      }
-    } else if (!isListening) {
-      setParTimeRemaining(null)
-      parTimeEnabledRef.current = false
+      timerRef.current = requestAnimationFrame(tick)
     }
-  }, [config.parTimeEnabled, config.parTime, audioState.state, config.beepEnabled, playBeep, stopListening, audioState])
 
-  // 开始监听时启动计时器
-  const startListeningWithTimer = useCallback(() => {
-    startTimeRef.current = Date.now()
-    setElapsedTime(0)
-    startListening()
-  }, [startListening])
+    tick()
 
-  // 自动重启逻辑 - 使用 shotCountRef 来检测
-  const autoRestartCheckedRef = useRef(false)
+    return () => {
+      if (timerRef.current) {
+        cancelAnimationFrame(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [
+    audioState.state,
+    audioState.setShotHistory,
+    config.parTimeEnabled,
+    config.parTime,
+    config.autoRestartEnabled,
+    config.beepEnabled,
+    stopListening
+  ])
+
+  // 按射击发数自动重启
   useEffect(() => {
-    // 只在射击状态变化时检查
-    const currentCount = refs.shotCountRef.current
-    const limit = config.autoRestartLimit || 5
-
-    if (config.autoRestartEnabled && currentCount >= limit && !autoRestartCheckedRef.current) {
-      autoRestartCheckedRef.current = true
-
-      // 重置计数
-      audioState.setShotCount(0)
-      audioState.setShotHistory([])
-      audioState.setCurrentShotTime(0)
-      refs.shotCountRef.current = 0
-
-      // 先停止监听
-      stopListening()
-
-      // 1 秒后随机延迟重启
-      setTimeout(() => {
-        startTimeRef.current = Date.now()
-        setElapsedTime(0)
-        if (startRandomDelayRef.current) {
-          startRandomDelayRef.current()
-        }
-        autoRestartCheckedRef.current = false
-      }, 1000)
-    } else if (!config.autoRestartEnabled) {
+    if (!config.autoRestartEnabled) {
       autoRestartCheckedRef.current = false
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+        setIsInfiniteLoop(false)
+      }
+      return
     }
-  }, [audioState.shotCount, config.autoRestartEnabled, config.autoRestartLimit, refs.shotCountRef, stopListening, audioState])
 
-  // 重写 toggle 函数
-  const handleToggleListening = () => {
-    const isListeningState = audioState.stateRef.current === AppState.LISTENING ||
-                             audioState.stateRef.current === AppState.DETECTED ||
-                             audioState.stateRef.current === AppState.TIMING
+    const limit = Math.max(1, config.autoRestartLimit || 5)
+    if (
+      audioState.shotCount < limit ||
+      autoRestartCheckedRef.current
+    ) {
+      return
+    }
 
-    // 如果是无限循环模式，正在监听，或者正在等待随机延迟，则执行停止操作
-    if (isInfiniteLoop || isListeningState || isWaitingForRandomDelay) {
-      // 停止时保存最终时间到历史记录
-      if (elapsedTime > 0) {
-        const now = new Date()
-        const timeStr = now.toLocaleTimeString()
+    autoRestartCheckedRef.current = true
+    setIsInfiniteLoop(true)
+    stopListening()
 
+    audioState.setShotCount(0)
+    audioState.setShotHistory([])
+    audioState.setCurrentShotTime(0)
+    shotCountRef.current = 0
+    sessionStartTimeRef.current = 0
+
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+    }
+    restartTimerRef.current = setTimeout(() => {
+      restartTimerRef.current = null
+      autoRestartCheckedRef.current = false
+      startRandomDelayRef.current?.()
+    }, AUTO_RESTART_DELAY_MS)
+  }, [
+    audioState.shotCount,
+    audioState.setShotCount,
+    audioState.setShotHistory,
+    audioState.setCurrentShotTime,
+    config.autoRestartEnabled,
+    config.autoRestartLimit,
+    stopListening
+  ])
+
+  const startListeningWithTimer = useCallback(() => {
+    audioState.setError(null)
+    autoRestartCheckedRef.current = false
+    parTimeFiredRef.current = false
+    shotCountRef.current = 0
+
+    audioState.setShotCount(0)
+    audioState.setShotHistory([])
+    audioState.setCurrentShotTime(0)
+    setElapsedTime(0)
+    setParTimeRemaining(config.parTimeEnabled ? config.parTime : null)
+    setIsInfiniteLoop(false)
+
+    startListening({ skipStateReset: true })
+  }, [
+    audioState.setError,
+    audioState.setShotCount,
+    audioState.setShotHistory,
+    audioState.setCurrentShotTime,
+    config.parTimeEnabled,
+    config.parTime,
+    startListening
+  ])
+
+  const startListeningWithRandomDelay = useCallback(() => {
+    audioState.setError(null)
+    autoRestartCheckedRef.current = false
+    stopListening()
+    cancelDelayRef.current?.()
+
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
+
+    shotCountRef.current = 0
+    audioState.setShotCount(0)
+    audioState.setShotHistory([])
+    audioState.setCurrentShotTime(0)
+    sessionStartTimeRef.current = 0
+    setElapsedTime(0)
+    setParTimeRemaining(config.parTimeEnabled ? config.parTime : null)
+    setIsInfiniteLoop(false)
+
+    startRandomDelayRef.current?.()
+  }, [
+    audioState.setError,
+    audioState.setShotCount,
+    audioState.setShotHistory,
+    audioState.setCurrentShotTime,
+    config.parTimeEnabled,
+    config.parTime,
+    stopListening
+  ])
+
+  const handleToggleListening = useCallback(() => {
+    const currentState = audioState.stateRef.current
+    const isActive =
+      currentState === AppState.LISTENING ||
+      currentState === AppState.DETECTED ||
+      currentState === AppState.TIMING
+
+    if (isInfiniteLoop || isActive || isWaitingForRandomDelay) {
+      const finalTime = sessionStartTimeRef.current
+        ? Date.now() - sessionStartTimeRef.current
+        : elapsedTime
+
+      if (finalTime > 0) {
         audioState.setShotHistory(prev => [{
-          time: timeStr,
+          time: new Date().toLocaleTimeString(),
           id: Date.now(),
-          timeSinceStart: elapsedTime,
-          timeSinceLastMatch: elapsedTime,
-          shotNumber: audioState.shotCount + 1,
+          timeSinceStart: finalTime,
+          timeSinceLastMatch: finalTime,
+          shotNumber: shotCountRef.current + 1,
           totalTime: true
         }, ...prev.slice(0, 18)])
       }
 
-      // 取消 Par Time 计时器
-      if (parTimeTimerRef.current) {
-        cancelAnimationFrame(parTimeTimerRef.current)
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
       }
-      parTimeEnabledRef.current = false
-      setParTimeRemaining(null)
-
-      // 取消主计时器
-      if (timerRef.current) {
-        cancelAnimationFrame(timerRef.current)
-      }
-      setElapsedTime(0)
 
       stopListening()
+      cancelDelayRef.current?.()
       setIsInfiniteLoop(false)
-      if (isWaitingForRandomDelay && cancelDelayRef.current) {
-        cancelDelayRef.current()
-      }
-    } else {
-      startListeningWithTimer()
+      autoRestartCheckedRef.current = false
+      sessionStartTimeRef.current = 0
+      setElapsedTime(0)
+      setParTimeRemaining(null)
+      return
     }
-  }
+
+    startListeningWithTimer()
+  }, [
+    audioState.stateRef,
+    audioState.setShotHistory,
+    isInfiniteLoop,
+    isWaitingForRandomDelay,
+    elapsedTime,
+    stopListening,
+    startListeningWithTimer
+  ])
+
+  // 卸载时清理重启定时器和动画帧
+  useEffect(() => {
+    return () => {
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+      }
+      if (timerRef.current) {
+        cancelAnimationFrame(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [])
 
   return {
     // 状态
@@ -314,29 +390,26 @@ export function useAudioDetection(initialConfig = {}) {
     shotCount: audioState.shotCount,
     currentShotTime: audioState.currentShotTime,
     shotHistory: audioState.shotHistory,
-    countdown: audioState.countdown,
     randomDelayCountdown,
     isWaitingForRandomDelay,
     elapsedTime,
     parTimeRemaining,
     isInfiniteLoop,
 
-    // 操作函数
+    // 操作
     startListening,
     stopListening,
     toggleListening: handleToggleListening,
     startListeningWithRandomDelay,
 
-    // Refs
+    // Refs / 工具
     analyserRef: refs.analyserRef,
-
-    // 工具函数
     getStatusInfo
   }
 }
 
 /**
- * 扩展的音频状态管理 Hook（添加 Shot Timer 专用状态）
+ * Shot Timer 专用状态
  */
 function useAudioState() {
   const coreState = useAudioCoreState()
@@ -352,16 +425,5 @@ function useAudioState() {
     setCurrentShotTime,
     shotHistory,
     setShotHistory
-  }
-}
-
-// 扩展 refs
-function useAudioRefsWithExtensions() {
-  const coreRefs = useAudioCoreRefs()
-  const shotCountRef = useRef(0)
-
-  return {
-    ...coreRefs,
-    shotCountRef
   }
 }

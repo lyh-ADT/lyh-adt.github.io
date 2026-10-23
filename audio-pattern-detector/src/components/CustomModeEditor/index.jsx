@@ -165,6 +165,7 @@ function CustomModeEditor({ nodes, onNodesChange, disabled = false }) {
                 onMoveUp={() => handleMoveNode(index, -1)}
                 onMoveDown={() => handleMoveNode(index, 1)}
                 onUpdateConfig={(key, value) => handleUpdateConfig(index, key, value)}
+                isLast={index === nodes.length - 1}
                 disabled={disabled}
               />
             ))}
@@ -201,7 +202,7 @@ function AddNodeButton({ type, onClick, disabled }) {
 }
 
 // 节点列表项组件
-function NodeItem({ node, index, isSelected, onSelect, onDelete, onMoveUp, onMoveDown, disabled }) {
+function NodeItem({ node, index, isSelected, onSelect, onDelete, onMoveUp, onMoveDown, isLast, disabled }) {
   const { type, config } = node
   const icon = getNodeIcon(type)
   const name = getNodeDisplayName(type)
@@ -234,7 +235,7 @@ function NodeItem({ node, index, isSelected, onSelect, onDelete, onMoveUp, onMov
         <button
           className="action-btn move-btn"
           onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-          disabled={disabled || index === 0}
+          disabled={disabled || isLast}
           title="下移"
         >
           ⬇️
@@ -293,6 +294,12 @@ function NodeConfigPanel({ node, index, onUpdateConfig, onDelete, disabled }) {
               min={100}
               max={10000}
               step={100}
+              disabled={disabled}
+            />
+            <ToggleInput
+              label="延迟结束后播放提示音"
+              checked={config.beepOnComplete}
+              onChange={(v) => onUpdateConfig('beepOnComplete', v)}
               disabled={disabled}
             />
           </>
@@ -405,7 +412,10 @@ function ConfigInput({ label, value, onChange, min, max, step, disabled }) {
       <input
         type="number"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const parsed = Number(e.target.value)
+          onChange(Number.isFinite(parsed) ? parsed : min)
+        }}
         min={min}
         max={max}
         step={step}

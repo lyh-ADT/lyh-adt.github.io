@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAudioDetection, AppState } from '../../hooks/useAudioDetection'
+import { formatTime } from '../../utils/audioDetection'
 import {
   StatusBar,
   ControlButton,
@@ -24,6 +25,7 @@ function AudioDetector() {
 
   const canvasRef = useRef(null)
   const visualizerFrameRef = useRef(null)
+  const frequencyDataRef = useRef(null)
 
   // 使用 Shot Timer Hook
   const {
@@ -31,7 +33,6 @@ function AudioDetector() {
     shotCount,
     currentShotTime,
     shotHistory,
-    countdown,
     randomDelayCountdown,
     isWaitingForRandomDelay,
     toggleListening,
@@ -66,55 +67,17 @@ function AudioDetector() {
     ctx.fillRect(0, 0, width, height)
 
     const barWidth = (width / dataArray.length) * 2.5
-    let x = 0
+    const gradient = ctx.createLinearGradient(0, height, 0, 0)
+    gradient.addColorStop(0, '#667eea')
+    gradient.addColorStop(1, '#764ba2')
+    ctx.fillStyle = gradient
 
+    let x = 0
     for (let i = 0; i < dataArray.length; i++) {
       const barHeight = (dataArray[i] / 255) * height
-
-      const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight)
-      gradient.addColorStop(0, '#667eea')
-      gradient.addColorStop(1, '#764ba2')
-
-      ctx.fillStyle = gradient
       ctx.fillRect(x, height - barHeight, barWidth, barHeight)
-
       x += barWidth + 1
     }
-  }, [])
-
-  // 绘制波形
-  const drawWaveform = useCallback((data, isRecording) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    const width = canvas.width
-    const height = canvas.height
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
-    ctx.fillRect(0, 0, width, height)
-
-    ctx.beginPath()
-    ctx.strokeStyle = isRecording ? '#f44336' : '#2196f3'
-    ctx.lineWidth = 2
-
-    const sliceWidth = width / data.length
-    let x = 0
-
-    for (let i = 0; i < data.length; i++) {
-      const v = data[i] * 5
-      const y = height / 2 + v * height / 2
-
-      if (i === 0) {
-        ctx.moveTo(x, y)
-      } else {
-        ctx.lineTo(x, y)
-      }
-
-      x += sliceWidth
-    }
-
-    ctx.stroke()
   }, [])
 
   // 可视化循环
@@ -122,9 +85,12 @@ function AudioDetector() {
     if (state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING) {
       const animate = () => {
         if (analyserRef.current) {
-          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
-          analyserRef.current.getByteFrequencyData(dataArray)
-          drawFrequencyData(dataArray)
+          const binCount = analyserRef.current.frequencyBinCount
+          if (!frequencyDataRef.current || frequencyDataRef.current.length !== binCount) {
+            frequencyDataRef.current = new Uint8Array(binCount)
+          }
+          analyserRef.current.getByteFrequencyData(frequencyDataRef.current)
+          drawFrequencyData(frequencyDataRef.current)
           visualizerFrameRef.current = requestAnimationFrame(animate)
         }
       }
@@ -140,22 +106,13 @@ function AudioDetector() {
 
   const statusInfo = getStatusInfo()
 
-  // 如果正在等待随机延迟，显示等待信息
+  // 等待随机延迟 / 自动重启的 1 秒间隔都显示更明确的提示
+  const isRestarting = isInfiniteLoop && state === AppState.IDLE && !isWaitingForRandomDelay
   const displayStatus = isWaitingForRandomDelay
     ? { indicator: 'waiting', text: `等待中... 剩余 ${randomDelayCountdown.toFixed(1)} 秒` }
-    : statusInfo
-
-  // 格式化时间为 HH:MM:SS.sss
-  const formatTime = (ms) => {
-    if (ms === null || ms === undefined) return '--:--:--.---'
-    const totalSeconds = Math.floor(ms / 1000)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    const milliseconds = ms % 1000
-    const pad = (num, len = 2) => String(num).padStart(len, '0')
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(milliseconds, 3)}`
-  }
+    : isRestarting
+      ? { indicator: 'waiting', text: '自动重启准备中...' }
+      : statusInfo
 
   return (
     <div className="app-layout">
@@ -167,7 +124,7 @@ function AudioDetector() {
 
         {/* 计时器显示 */}
         <div className="timer-display-card">
-          <span className="timer-label">计时</span>
+          <span className="timer-label">总计时</span>
           <span className="timer-value">{formatTime(elapsedTime)}</span>
           {parTimeEnabled && parTimeRemaining !== null && elapsedTime > 0 && (
             <span className="par-time-remaining">Par Time: {parTimeRemaining}ms</span>
@@ -186,7 +143,7 @@ function AudioDetector() {
             variant="warning"
             icon="🎲"
             label={isWaitingForRandomDelay ? '延时中...' : '随机延时启动'}
-            disabled={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isWaitingForRandomDelay}
+            disabled={state === AppState.LISTENING || state === AppState.DETECTED || state === AppState.TIMING || isWaitingForRandomDelay || isInfiniteLoop}
           />
         </div>
 

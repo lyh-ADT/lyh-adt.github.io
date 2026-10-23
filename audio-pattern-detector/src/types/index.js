@@ -15,30 +15,29 @@ export const NodeType = {
 // 节点配置默认值
 export const defaultNodeConfigs = {
   [NodeType.RandomDelay]: {
-    minDelay: 1000,  // 最小延迟（毫秒）
-    maxDelay: 5000   // 最大延迟（毫秒）
+    minDelay: 1000,          // 最小延迟（毫秒）
+    maxDelay: 5000,          // 最大延迟（毫秒）
+    beepOnComplete: false    // 延迟结束后是否播放提示音
   },
   [NodeType.WaitForShot]: {
-    threshold: 0.7,      // 检测阈值
-    beepEnabled: true,   // 检测到枪声后是否播放提示音
-    beepFrequency: 1000, // 提示音频率
-    beepDuration: 100    // 提示音时长
+    threshold: 0.7,          // 检测阈值
+    beepEnabled: true       // 检测到枪声后是否播放提示音
   },
   [NodeType.ParTime]: {
-    parTime: 1000,       // Par Time（毫秒）
-    beepOnTimeout: true, // 到期后是否播放提示音
-    stopOnTimeout: false // 到期后是否停止整个流程
+    parTime: 1000,           // Par Time（毫秒）
+    beepOnTimeout: true,     // 到期后是否播放提示音
+    stopOnTimeout: false     // 到期后是否停止整个流程
   },
   [NodeType.AutoRestart]: {
     delayBeforeRestart: 1000 // 重启前延迟（毫秒）
   },
   [NodeType.Beep]: {
-    duration: 100,       // 蜂鸣时长（毫秒）
-    frequency: 1000,     // 频率（Hz）
-    volume: 0.5          // 音量
+    duration: 100,           // 蜂鸣时长（毫秒）
+    frequency: 1000,         // 频率（Hz）
+    volume: 0.5              // 音量
   },
   [NodeType.FixedDelay]: {
-    delay: 1000          // 固定延迟（毫秒）
+    delay: 1000              // 固定延迟（毫秒）
   }
 }
 
@@ -46,7 +45,7 @@ export const defaultNodeConfigs = {
 export function createNode(type) {
   const config = defaultNodeConfigs[type]
   return {
-    id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
     type,
     config: { ...config }
   }
@@ -79,10 +78,10 @@ export function getNodeIcon(type) {
 }
 
 // 获取节点描述
-export function getNodeDescription(type, config) {
+export function getNodeDescription(type, config = {}) {
   switch (type) {
     case NodeType.RandomDelay:
-      return `${(config.minDelay / 1000).toFixed(1)}s - ${(config.maxDelay / 1000).toFixed(1)}s 随机延迟`
+      return `${(config.minDelay / 1000).toFixed(1)}s - ${(config.maxDelay / 1000).toFixed(1)}s 随机延迟${config.beepOnComplete ? '，结束提示音' : ''}`
     case NodeType.WaitForShot:
       return `阈值：${config.threshold}, 提示音：${config.beepEnabled ? '开' : '关'}`
     case NodeType.ParTime:

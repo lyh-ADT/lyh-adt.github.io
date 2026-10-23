@@ -1,20 +1,25 @@
 /**
- * 自定义模式执行引擎 Hook
- * 按顺序执行节点列表，支持循环、条件跳转等
+ * 自定义模式执行引擎
+ * 按顺序执行节点列表，支持随机延迟、等待枪声、Par Time、蜂鸣器和自动重启。
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { NodeType, createNode } from '../types/index.js'
-import { useBeep } from './useBeep'
-import { useAudioCoreState, useAudioCoreRefs, useShotDetection, useListeningActionsForShot, AppState } from './useAudioCore'
+import { NodeType } from '../types/index.js'
+import { useBeep, playTone } from './useBeep'
+import {
+  useAudioCoreState,
+  useAudioCoreRefs,
+  useShotDetection,
+  useListeningActionsForShot,
+  useCleanup
+} from './useAudioCore'
 
 // 执行状态
 export const ExecutionState = {
-  IDLE: 'idle',           // 空闲
-  RUNNING: 'running',     // 运行中
-  PAUSED: 'paused',       // 暂停
-  STOPPED: 'stopped',     // 已停止
-  COMPLETED: 'completed'  // 已完成
+  IDLE: 'idle',
+  RUNNING: 'running',
+  STOPPED: 'stopped',
+  COMPLETED: 'completed'
 }
 
 // 当前节点类型
@@ -28,11 +33,12 @@ export const CurrentNodeType = {
   RESTART_DELAY: 'restart_delay'
 }
 
+const DETECTION_WINDOW_SIZE = 512
+const MATCH_COOLDOWN_MS = 80
+const REFRACTORY_MS = 60
+
 /**
  * 自定义模式 Hook
- * @param {Array} nodes - 节点列表
- * @param {Object} options - 配置选项
- * @returns {Object} 执行状态和控制函数
  */
 export function useCustomMode(nodes = [], options = {}) {
   const {
@@ -43,7 +49,6 @@ export function useCustomMode(nodes = [], options = {}) {
     defaultBeepEnabled = true
   } = options
 
-  // 执行状态
   const [executionState, setExecutionState] = useState(ExecutionState.IDLE)
   const [currentNodeIndex, setCurrentNodeIndex] = useState(-1)
   const [currentNodeType, setCurrentNodeType] = useState(CurrentNodeType.NONE)
@@ -53,24 +58,21 @@ export function useCustomMode(nodes = [], options = {}) {
   const [shotHistory, setShotHistory] = useState([])
   const [parTimeRemaining, setParTimeRemaining] = useState(null)
 
-  // Refs
   const nodesRef = useRef(nodes)
   const executionStateRef = useRef(ExecutionState.IDLE)
   const currentNodeIndexRef = useRef(-1)
   const currentNodeTypeRef = useRef(CurrentNodeType.NONE)
   const timerRef = useRef(null)
   const parTimeTimerRef = useRef(null)
-  const startTimeRef = useRef(0)  // 当前节点的启动时间
+  const startTimeRef = useRef(0)
   const parTimeStartTimeRef = useRef(0)
-  const sequenceStartTimeRef = useRef(0)  // 整个序列的启动时间
-  const lastNodeEndTimeRef = useRef(0)  // 上一个节点的结束时间
+  const sequenceStartTimeRef = useRef(0)
+  const lastNodeEndTimeRef = useRef(0)
   const shotCountRef = useRef(0)
   const shotHistoryRef = useRef([])
   const onNodeCompleteRef = useRef(null)
   const onSequenceCompleteRef = useRef(null)
-  const sequenceStartedRef = useRef(false)  // 序列是否已启动
 
-  // 更新 refs
   useEffect(() => {
     nodesRef.current = nodes
   }, [nodes])
@@ -90,132 +92,89 @@ export function useCustomMode(nodes = [], options = {}) {
   // 音频核心状态
   const audioCoreState = useAudioCoreState()
   const coreRefs = useAudioCoreRefs()
+  const refs = { ...coreRefs, shotCountRef }
 
-  // 合并 refs（使用外部的 shotCountRef 而不是 coreRefs 中的）
-  const refs = {
-    ...coreRefs,
-    shotCountRef
-  }
+  const setCurrentShotTime = useCallback(() => {}, [])
 
-  // 扩展 audioState 以包含 useListeningActionsForShot 需要的函数
   const audioState = {
     ...audioCoreState,
     setShotCount,
     setShotHistory,
-    setCurrentShotTime: () => {} // 空函数，因为 custom mode 不使用这个
+    setCurrentShotTime
   }
 
-  // 蜂鸣器
-  const playBeep = useBeep(defaultBeepEnabled)
+  const playBeep = useBeep(defaultBeepEnabled, { duration: 120, volume: 0.4 })
+  const playShotBeep = useBeep(true, { duration: 50, volume: 0.35 })
 
-  // 为每个节点创建独立的枪声检测 Hook
-  const [shotDetectionConfig, setShotDetectionConfig] = useState({
+  // 检测配置通过 ref 传递，节点开始时同步写入，避免状态更新延迟导致阈值滞后。
+  const shotConfigRef = useRef({
     threshold: defaultThreshold,
-    beepEnabled: true
+    beepEnabled: true,
+    matchCooldown: MATCH_COOLDOWN_MS,
+    refractoryMs: REFRACTORY_MS,
+    windowSize: DETECTION_WINDOW_SIZE,
+    manageStats: false,
+    detectedHoldMs: 200
   })
 
-  // 创建回调函数的 ref，确保每次都使用最新的逻辑
-  const onShotDetectedCallbackRef = useRef(null)
+  const configureShotDetection = useCallback((config) => {
+    shotConfigRef.current = {
+      ...shotConfigRef.current,
+      threshold: config?.threshold ?? defaultThreshold,
+      beepEnabled: config?.beepEnabled ?? true
+    }
+  }, [defaultThreshold])
 
-  const playShotBeep = useBeep(shotDetectionConfig.beepEnabled)
+  const handleShotDetectedRef = useRef(null)
+  const executeNextNodeRef = useRef(null)
+  const executeNodeRef = useRef(null)
 
-  // 创建枪声检测的 ref，用于在回调中访问最新状态
-  const shotDetectionConfigRef = useRef(shotDetectionConfig)
-  useEffect(() => {
-    shotDetectionConfigRef.current = shotDetectionConfig
-  }, [shotDetectionConfig])
-
-  // 创建 detectShot 的包装函数
-  const detectShotRef = useRef(null)
-
-  // 设置回调函数
-  useEffect(() => {
-    onShotDetectedCallbackRef.current = (shotData) => {
-      console.log('枪声检测回调触发，当前节点类型:', currentNodeTypeRef.current)
-      // 枪声检测回调 - 只在等待枪声节点时执行
+  const { detectShot } = useShotDetection(
+    refs,
+    shotConfigRef,
+    audioState,
+    playShotBeep,
+    (shotData) => {
       if (currentNodeTypeRef.current === CurrentNodeType.WAIT_FOR_SHOT) {
-        console.log('执行 handleShotDetected')
-        handleShotDetectedRef.current(shotData)
-      } else {
-        console.log('跳过，因为当前不是等待枪声节点')
+        handleShotDetectedRef.current?.(shotData)
       }
     }
-  }, [])
+  )
 
-  const { detectShot } = useShotDetection(refs, {
-    threshold: shotDetectionConfigRef.current.threshold,
-    matchCooldown: 100
-  }, audioState, playShotBeep, (shotData) => {
-    // 通过 ref 调用最新的回调
-    if (onShotDetectedCallbackRef.current) {
-      onShotDetectedCallbackRef.current(shotData)
-    }
-  })
+  const { startListening, stopListening } = useListeningActionsForShot(
+    refs,
+    audioState,
+    detectShot
+  )
 
-  // 保存 detectShot 到 ref
-  useEffect(() => {
-    detectShotRef.current = detectShot
-  }, [detectShot])
+  useCleanup(refs)
 
-  const {
-    startListening,
-    stopListening
-  } = useListeningActionsForShot(refs, {
-    threshold: shotDetectionConfigRef.current.threshold,
-    matchCooldown: 100
-  }, audioState, detectShot)
-
-  // 播放蜂鸣器节点
   const playBeepNode = useCallback((config) => {
     if (!config) return
-
-    const { duration = 100, frequency = 1000, volume = 0.5 } = config
-
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-      oscillator.type = 'sine'
-      oscillator.frequency.value = frequency
-      gainNode.gain.setValueAtTime(volume, audioContext.currentTime)
-      oscillator.start(audioContext.currentTime)
-
-      setTimeout(() => {
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration / 1000)
-        oscillator.stop(audioContext.currentTime + duration / 1000)
-        setTimeout(() => audioContext.close(), duration + 50)
-      }, duration)
-    } catch (err) {
-      console.error('播放蜂鸣器失败:', err)
-    }
+    playTone({
+      duration: config.duration ?? 100,
+      frequency: config.frequency ?? 1000,
+      volume: config.volume ?? 0.5,
+      type: 'sine'
+    })
   }, [])
 
-  // 处理枪声检测
-  const handleShotDetectedRef = useRef(null)
   const handleShotDetected = useCallback((shotData) => {
-    console.log('handleShotDetected 被调用')
-    // 更新射击计数
     shotCountRef.current += 1
     setShotCount(shotCountRef.current)
 
-    // 添加到历史记录 - 使用序列开始时间而不是节点开始时间
-    const now = new Date()
-    const timeStr = now.toLocaleTimeString()
-    const timeSinceStart = Date.now() - sequenceStartTimeRef.current
-    // 计算与上一个节点的时间间隔
+    const now = Date.now()
+    const timeSinceStart = now - sequenceStartTimeRef.current
     const timeSinceLastNode = lastNodeEndTimeRef.current !== 0
       ? timeSinceStart - (lastNodeEndTimeRef.current - sequenceStartTimeRef.current)
       : timeSinceStart
 
-    // 更新上一个节点结束时间为当前时间
-    lastNodeEndTimeRef.current = Date.now()
+    lastNodeEndTimeRef.current = now
 
+    const node = nodesRef.current[currentNodeIndexRef.current]
     const newHistory = [{
-      time: timeStr,
-      id: Date.now(),
+      time: new Date().toLocaleTimeString(),
+      id: now,
       timeSinceStart,
       timeSinceLastMatch: timeSinceLastNode,
       shotNumber: shotCountRef.current,
@@ -225,52 +184,54 @@ export function useCustomMode(nodes = [], options = {}) {
     setShotHistory(newHistory)
     shotHistoryRef.current = newHistory
 
-    console.log('检测到枪声，继续下一个节点，当前索引:', currentNodeIndexRef.current)
+    onNodeCompleteRef.current?.({
+      node,
+      index: currentNodeIndexRef.current,
+      totalNodes: nodesRef.current.length,
+      elapsedTime: now - startTimeRef.current,
+      shot: true,
+      shotData
+    })
 
-    // 等待枪声节点完成，继续下一个节点
+    // 先停止监听，避免后续节点执行期间继续累计枪声。
+    stopListening()
     executeNextNodeRef.current()
-  }, [])
+  }, [stopListening])
 
-  // 保存 handleShotDetected 到 ref
   useEffect(() => {
     handleShotDetectedRef.current = handleShotDetected
   }, [handleShotDetected])
 
-  // 添加节点完成记录到历史
-  const addNodeCompleteToHistory = useCallback((node, elapsedTime) => {
-    const now = new Date()
-    const timeStr = now.toLocaleTimeString()
-    const timeSinceStart = Date.now() - sequenceStartTimeRef.current
-    // 计算与上一个节点的时间间隔
+  const addNodeCompleteToHistory = useCallback((node, nodeElapsedTime) => {
+    const now = Date.now()
+    const timeSinceStart = now - sequenceStartTimeRef.current
     const timeSinceLastNode = lastNodeEndTimeRef.current !== 0
       ? timeSinceStart - (lastNodeEndTimeRef.current - sequenceStartTimeRef.current)
       : timeSinceStart
 
-    // 更新上一个节点结束时间为当前时间
-    lastNodeEndTimeRef.current = Date.now()
-
-    console.log('添加节点完成记录:', node.type, '耗时:', elapsedTime, '距上节点:', timeSinceLastNode, '当前历史记录长度:', shotHistoryRef.current.length)
+    lastNodeEndTimeRef.current = now
 
     const newHistory = [{
-      time: timeStr,
-      id: Date.now(),
+      time: new Date().toLocaleTimeString(),
+      id: now,
       timeSinceStart,
       timeSinceLastMatch: timeSinceLastNode,
-      shotNumber: shotCountRef.current + 1,
+      shotNumber: shotCountRef.current,
       nodeType: node.type,
       nodeCompleted: true
     }, ...shotHistoryRef.current.slice(0, 18)]
 
-    console.log('新历史记录长度:', newHistory.length)
     setShotHistory(newHistory)
     shotHistoryRef.current = newHistory
+
+    onNodeCompleteRef.current?.({
+      node,
+      index: currentNodeIndexRef.current,
+      totalNodes: nodesRef.current.length,
+      elapsedTime: nodeElapsedTime
+    })
   }, [])
 
-  // 执行下一个节点
-  const executeNextNodeRef = useRef(null)
-  const executeNodeRef = useRef(null)
-
-  // 执行下一个节点
   const executeNextNode = useCallback(() => {
     if (executionStateRef.current !== ExecutionState.RUNNING) {
       return
@@ -279,11 +240,9 @@ export function useCustomMode(nodes = [], options = {}) {
     const nextIndex = currentNodeIndexRef.current + 1
 
     if (nextIndex >= nodesRef.current.length) {
-      // 序列完成
       setExecutionState(ExecutionState.COMPLETED)
       executionStateRef.current = ExecutionState.COMPLETED
 
-      // 停止音频监听，防止继续检测枪声
       stopListening()
 
       onSequenceCompleteRef.current?.({
@@ -291,16 +250,21 @@ export function useCustomMode(nodes = [], options = {}) {
         shotHistory: shotHistoryRef.current,
         totalTime: Date.now() - sequenceStartTimeRef.current
       })
+
       setCurrentNodeIndex(-1)
+      currentNodeIndexRef.current = -1
       setCurrentNodeType(CurrentNodeType.NONE)
       currentNodeTypeRef.current = CurrentNodeType.NONE
       return
     }
 
     executeNodeRef.current(nextIndex)
-  }, [])
+  }, [stopListening])
 
-  // 执行指定节点
+  useEffect(() => {
+    executeNextNodeRef.current = executeNextNode
+  }, [executeNextNode])
+
   const executeNode = useCallback((index) => {
     if (executionStateRef.current !== ExecutionState.RUNNING) {
       return
@@ -314,17 +278,12 @@ export function useCustomMode(nodes = [], options = {}) {
 
     setCurrentNodeIndex(index)
     currentNodeIndexRef.current = index
-
-    // 只在序列第一次启动时设置 sequenceStartTimeRef
-    if (!sequenceStartedRef.current) {
-      sequenceStartTimeRef.current = Date.now()
-      sequenceStartedRef.current = true
-    }
     startTimeRef.current = Date.now()
+    setCurrentNodeType(CurrentNodeType.NONE)
+    currentNodeTypeRef.current = CurrentNodeType.NONE
 
     const { type, config } = node
 
-    // 通知节点开始
     onNodeStart?.({ node, index, totalNodes: nodesRef.current.length })
 
     switch (type) {
@@ -352,22 +311,16 @@ export function useCustomMode(nodes = [], options = {}) {
     }
   }, [onNodeStart])
 
-  // 保存函数到 refs
-  useEffect(() => {
-    executeNextNodeRef.current = executeNextNode
-  }, [executeNextNode])
-
   useEffect(() => {
     executeNodeRef.current = executeNode
   }, [executeNode])
 
-  // 执行随机延迟节点
   const executeRandomDelayNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.RANDOM_DELAY)
     currentNodeTypeRef.current = CurrentNodeType.RANDOM_DELAY
 
     const minDelay = config?.minDelay || 1000
-    const maxDelay = config?.maxDelay || 5000
+    const maxDelay = Math.max(minDelay, config?.maxDelay || 5000)
     const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay
 
     setCountdown(delay / 1000)
@@ -375,24 +328,25 @@ export function useCustomMode(nodes = [], options = {}) {
 
     const startTime = Date.now()
     const updateInterval = setInterval(() => {
-      const elapsed = (Date.now() - startTime) / 1000
-      const remaining = Math.max(0, (delay / 1000) - elapsed)
-      setCountdown(parseFloat(remaining.toFixed(1)))
-      setElapsedTime(Math.floor(elapsed * 1000))
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, delay - elapsed)
+      setCountdown(parseFloat((remaining / 1000).toFixed(1)))
+      setElapsedTime(elapsed)
 
       if (remaining <= 0) {
         clearInterval(updateInterval)
         setCountdown(0)
-        // 添加节点完成记录
-        addNodeCompleteToHistory({ type: NodeType.RandomDelay }, Math.floor(delay))
+        if (config?.beepOnComplete) {
+          playBeep()
+        }
+        addNodeCompleteToHistory({ type: NodeType.RandomDelay }, delay)
         executeNextNodeRef.current()
       }
     }, 100)
 
     timerRef.current = { type: 'randomDelay', cleanup: () => clearInterval(updateInterval) }
-  }, [addNodeCompleteToHistory])
+  }, [addNodeCompleteToHistory, playBeep])
 
-  // 执行固定延迟节点
   const executeFixedDelayNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.FIXED_DELAY)
     currentNodeTypeRef.current = CurrentNodeType.FIXED_DELAY
@@ -403,15 +357,14 @@ export function useCustomMode(nodes = [], options = {}) {
 
     const startTime = Date.now()
     const updateInterval = setInterval(() => {
-      const elapsed = (Date.now() - startTime) / 1000
-      const remaining = Math.max(0, (delay / 1000) - elapsed)
-      setCountdown(parseFloat(remaining.toFixed(1)))
-      setElapsedTime(Math.floor(elapsed * 1000))
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, delay - elapsed)
+      setCountdown(parseFloat((remaining / 1000).toFixed(1)))
+      setElapsedTime(elapsed)
 
       if (remaining <= 0) {
         clearInterval(updateInterval)
         setCountdown(0)
-        // 添加节点完成记录
         addNodeCompleteToHistory({ type: NodeType.FixedDelay }, delay)
         executeNextNodeRef.current()
       }
@@ -420,41 +373,36 @@ export function useCustomMode(nodes = [], options = {}) {
     timerRef.current = { type: 'fixedDelay', cleanup: () => clearInterval(updateInterval) }
   }, [addNodeCompleteToHistory])
 
-  // 执行等待枪声节点
   const executeWaitForShotNode = useCallback((config) => {
-    console.log('执行等待枪声节点')
     setCurrentNodeType(CurrentNodeType.WAIT_FOR_SHOT)
     currentNodeTypeRef.current = CurrentNodeType.WAIT_FOR_SHOT
 
-    setShotDetectionConfig({
-      threshold: config?.threshold || defaultThreshold,
-      beepEnabled: config?.beepEnabled ?? true
-    })
+    configureShotDetection(config)
 
     setElapsedTime(0)
     setCountdown(null)
     startTimeRef.current = Date.now()
 
-    // 清空音频缓冲区，防止之前的枪声数据导致误触发
-    refs.inputBufferRef.current = []
-    refs.isDetectingRef.current = false
+    // 先停掉上一个节点可能残留的监听，再开始新的监听。
+    stopListening()
 
-    // 启动音频监听（跳过状态重置，保留历史记录）
-    startListening({ skipStateReset: true, keepLastMatchTime: true })
-
-    // 更新计时器
     const animate = () => {
-      if (currentNodeTypeRef.current === CurrentNodeType.WAIT_FOR_SHOT &&
-          executionStateRef.current === ExecutionState.RUNNING) {
-        setElapsedTime(Date.now() - startTimeRef.current)
-        timerRef.current = { type: 'waitShot', cleanup: () => {} }
-        requestAnimationFrame(animate)
+      if (
+        currentNodeTypeRef.current !== CurrentNodeType.WAIT_FOR_SHOT ||
+        executionStateRef.current !== ExecutionState.RUNNING
+      ) {
+        return
       }
+      setElapsedTime(Date.now() - startTimeRef.current)
+      requestAnimationFrame(animate)
     }
     requestAnimationFrame(animate)
-  }, [startListening, defaultThreshold])
 
-  // 执行 Par Time 节点
+    timerRef.current = { type: 'waitShot', cleanup: () => {} }
+
+    startListening({ skipStateReset: true, keepLastMatchTime: true })
+  }, [configureShotDetection, startListening, stopListening])
+
   const executeParTimeNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.PAR_TIME)
     currentNodeTypeRef.current = CurrentNodeType.PAR_TIME
@@ -480,7 +428,6 @@ export function useCustomMode(nodes = [], options = {}) {
           playBeep()
         }
 
-        // 添加节点完成记录
         addNodeCompleteToHistory({ type: NodeType.ParTime }, parTime)
 
         if (stopOnTimeout) {
@@ -494,14 +441,16 @@ export function useCustomMode(nodes = [], options = {}) {
             timeout: true
           })
           setCurrentNodeIndex(-1)
+          currentNodeIndexRef.current = -1
           setCurrentNodeType(CurrentNodeType.NONE)
           currentNodeTypeRef.current = CurrentNodeType.NONE
         } else {
           executeNextNodeRef.current()
         }
-      } else {
-        parTimeTimerRef.current = requestAnimationFrame(updateParTime)
+        return
       }
+
+      parTimeTimerRef.current = requestAnimationFrame(updateParTime)
     }
 
     updateParTime()
@@ -514,9 +463,8 @@ export function useCustomMode(nodes = [], options = {}) {
         }
       }
     }
-  }, [playBeep, stopListening, addNodeCompleteToHistory])
+  }, [addNodeCompleteToHistory, playBeep, stopListening])
 
-  // 执行蜂鸣器节点
   const executeBeepNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.BEEP)
     currentNodeTypeRef.current = CurrentNodeType.BEEP
@@ -524,41 +472,48 @@ export function useCustomMode(nodes = [], options = {}) {
     playBeepNode(config)
 
     const duration = config?.duration || 100
-
-    setTimeout(() => {
-      // 添加节点完成记录
+    const timeout = setTimeout(() => {
       addNodeCompleteToHistory({ type: NodeType.Beep }, duration)
       executeNextNodeRef.current()
     }, duration + 50)
 
-    timerRef.current = { type: 'beep', cleanup: () => {} }
-  }, [playBeepNode, addNodeCompleteToHistory])
+    timerRef.current = {
+      type: 'beep',
+      cleanup: () => clearTimeout(timeout)
+    }
+  }, [addNodeCompleteToHistory, playBeepNode])
 
-  // 执行自动重启节点
   const executeAutoRestartNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.RESTART_DELAY)
     currentNodeTypeRef.current = CurrentNodeType.RESTART_DELAY
 
-    const delayBeforeRestart = config?.delayBeforeRestart || 1000
-
-    // 添加节点完成记录
+    const delayBeforeRestart = config?.delayBeforeRestart ?? 1000
     addNodeCompleteToHistory({ type: NodeType.AutoRestart }, delayBeforeRestart)
 
-    // 延迟后直接从头开始执行序列
     setCountdown(delayBeforeRestart / 1000)
+    setElapsedTime(0)
 
     const startTime = Date.now()
     const updateInterval = setInterval(() => {
-      const elapsed = (Date.now() - startTime) / 1000
-      const remaining = Math.max(0, (delayBeforeRestart / 1000) - elapsed)
-      setCountdown(parseFloat(remaining.toFixed(1)))
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, delayBeforeRestart - elapsed)
+      setCountdown(parseFloat((remaining / 1000).toFixed(1)))
 
       if (remaining <= 0) {
         clearInterval(updateInterval)
-        // 重启序列 - 清空所有记录
+
+        // 新一轮序列必须重新建立时间基准。
         shotCountRef.current = 0
         setShotCount(0)
         setShotHistory([])
+        shotHistoryRef.current = []
+        sequenceStartTimeRef.current = Date.now()
+        lastNodeEndTimeRef.current = 0
+        setCurrentNodeIndex(-1)
+        currentNodeIndexRef.current = -1
+        setParTimeRemaining(null)
+        setElapsedTime(0)
+
         executeNodeRef.current(0)
       }
     }, 100)
@@ -566,44 +521,56 @@ export function useCustomMode(nodes = [], options = {}) {
     timerRef.current = { type: 'restartDelay', cleanup: () => clearInterval(updateInterval) }
   }, [addNodeCompleteToHistory])
 
-  // 开始执行
   const start = useCallback(() => {
     if (nodesRef.current.length === 0) {
       console.warn('没有节点可执行')
       return
     }
 
-    setExecutionState(ExecutionState.RUNNING)
-    executionStateRef.current = ExecutionState.RUNNING
-    setCurrentNodeIndex(-1)
-    setCurrentNodeType(CurrentNodeType.NONE)
-    currentNodeTypeRef.current = CurrentNodeType.NONE
-    setShotCount(0)
-    setShotHistory([])
-    shotCountRef.current = 0
-    shotHistoryRef.current = []
-    sequenceStartTimeRef.current = Date.now()
-
-    // 开始执行第一个节点
-    executeNodeRef.current(0)
-  }, [])
-
-  // 停止执行
-  const stop = useCallback(() => {
-    // 清理计时器
     if (timerRef.current?.cleanup) {
       timerRef.current.cleanup()
     }
     if (parTimeTimerRef.current) {
       cancelAnimationFrame(parTimeTimerRef.current)
     }
+    stopListening()
+    audioCoreState.setError(null)
 
-    // 停止音频监听
+    setExecutionState(ExecutionState.RUNNING)
+    executionStateRef.current = ExecutionState.RUNNING
+    setCurrentNodeIndex(-1)
+    currentNodeIndexRef.current = -1
+    setCurrentNodeType(CurrentNodeType.NONE)
+    currentNodeTypeRef.current = CurrentNodeType.NONE
+    setCountdown(null)
+    setElapsedTime(0)
+    setParTimeRemaining(null)
+    setShotCount(0)
+    setShotHistory([])
+    shotCountRef.current = 0
+    shotHistoryRef.current = []
+    sequenceStartTimeRef.current = Date.now()
+    lastNodeEndTimeRef.current = 0
+
+    executeNodeRef.current(0)
+  }, [audioCoreState.setError, stopListening])
+
+  const stop = useCallback(() => {
+    if (timerRef.current?.cleanup) {
+      timerRef.current.cleanup()
+      timerRef.current = null
+    }
+    if (parTimeTimerRef.current) {
+      cancelAnimationFrame(parTimeTimerRef.current)
+      parTimeTimerRef.current = null
+    }
+
     stopListening()
 
     setExecutionState(ExecutionState.STOPPED)
     executionStateRef.current = ExecutionState.STOPPED
     setCurrentNodeIndex(-1)
+    currentNodeIndexRef.current = -1
     setCurrentNodeType(CurrentNodeType.NONE)
     currentNodeTypeRef.current = CurrentNodeType.NONE
     setCountdown(null)
@@ -611,40 +578,14 @@ export function useCustomMode(nodes = [], options = {}) {
     setParTimeRemaining(null)
   }, [stopListening])
 
-  // 暂停执行
-  const pause = useCallback(() => {
-    if (executionStateRef.current !== ExecutionState.RUNNING) {
-      return
+  // 麦克风不可用时停止正在运行的序列，避免卡在等待枪声节点。
+  useEffect(() => {
+    if (audioCoreState.error && executionStateRef.current === ExecutionState.RUNNING) {
+      stop()
     }
+  }, [audioCoreState.error, stop])
 
-    // 清理计时器
-    if (timerRef.current?.cleanup) {
-      timerRef.current.cleanup()
-    }
-    if (parTimeTimerRef.current) {
-      cancelAnimationFrame(parTimeTimerRef.current)
-    }
-
-    stopListening()
-
-    setExecutionState(ExecutionState.PAUSED)
-    executionStateRef.current = ExecutionState.PAUSED
-  }, [stopListening])
-
-  // 恢复执行
-  const resume = useCallback(() => {
-    if (executionStateRef.current !== ExecutionState.PAUSED) {
-      return
-    }
-
-    setExecutionState(ExecutionState.RUNNING)
-    executionStateRef.current = ExecutionState.RUNNING
-
-    // 从当前节点继续
-    executeNode(currentNodeIndexRef.current)
-  }, [executeNode])
-
-  // 清理
+  // 卸载时清理定时器和麦克风
   useEffect(() => {
     return () => {
       if (timerRef.current?.cleanup) {
@@ -658,29 +599,23 @@ export function useCustomMode(nodes = [], options = {}) {
   }, [stopListening])
 
   return {
-    // 状态
     executionState,
+    error: audioCoreState.error,
     currentNodeIndex,
     currentNodeType,
     countdown,
     elapsedTime,
-    shotCount: shotCountRef.current,
+    shotCount,
     shotHistory,
     parTimeRemaining,
     currentNodes: nodesRef.current,
 
-    // 音频 refs（用于可视化）
     analyserRef: refs.analyserRef,
 
-    // 控制函数
     start,
     stop,
-    pause,
-    resume,
 
-    // 工具函数
     isRunning: executionState === ExecutionState.RUNNING,
-    isPaused: executionState === ExecutionState.PAUSED,
     isStopped: executionState === ExecutionState.STOPPED,
     isCompleted: executionState === ExecutionState.COMPLETED,
     isIdle: executionState === ExecutionState.IDLE

@@ -58,3 +58,22 @@ body {
   color: #fff;
   box-shadow: 0 2px 12px rgba(102, 126, 234, 0.4);
 }
+
+@media (max-width: 600px) {
+  .app-nav {
+    padding: 0.5rem;
+  }
+
+  .nav-container {
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .nav-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.5rem 0.4rem;
+    font-size: 0.8rem;
+    white-space: normal;
+  }
+}

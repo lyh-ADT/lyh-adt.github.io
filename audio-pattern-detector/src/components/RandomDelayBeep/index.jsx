@@ -1,20 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useBeep } from '../../hooks/useBeep'
 import { useRandomDelay } from '../../hooks/useRandomDelay'
+import { formatTime } from '../../utils/audioDetection'
 import './RandomDelayBeep.css'
-
-// 格式化时间为 HH:MM:SS.sss
-function formatTime(ms) {
-  const totalSeconds = Math.floor(ms / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  const milliseconds = ms % 1000
-
-  const pad = (num, len = 2) => String(num).padStart(len, '0')
-
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(milliseconds, 3)}`
-}
 
 function RandomDelayBeep() {
   const [minDelay, setMinDelay] = useState(1)
@@ -23,8 +11,8 @@ function RandomDelayBeep() {
   const [history, setHistory] = useState([])
   const [beepEnabled, setBeepEnabled] = useState(true)
 
-  // Par Time 设置
-  const [parTime, setParTime] = useState(30)
+  // Par Time 设置（毫秒）
+  const [parTime, setParTime] = useState(30000)
   const [parTimeEnabled, setParTimeEnabled] = useState(false)
   const [parTimeRemaining, setParTimeRemaining] = useState(null)
 
@@ -33,15 +21,15 @@ function RandomDelayBeep() {
   const [elapsedTime, setElapsedTime] = useState(0)
   const [lastElapsedTime, setLastElapsedTime] = useState(null)
 
-  const timerRef = useRef(null)
-  const parTimeTimerRef = useRef(null)
   const startTimeRef = useRef(0)
-  const parTimeStartTimeRef = useRef(0)
+  const playBeepRef = useRef(null)
+  const parTimeFiredRef = useRef(false)
 
-  // 使用蜂鸣器 Hook
-  const playBeep = useBeep(beepEnabled)
+  const playBeep = useBeep(beepEnabled, { duration: 120, volume: 0.4 })
+  useEffect(() => {
+    playBeepRef.current = playBeep
+  }, [playBeep])
 
-  // 使用随机延迟 Hook
   const {
     isWaiting,
     countdown,
@@ -52,106 +40,86 @@ function RandomDelayBeep() {
     minDelay: minDelay * 1000,
     maxDelay: maxDelay * 1000,
     onComplete: () => {
-      // 随机延迟完成，播放 Beep 并开始计时
-      playBeep()
+      playBeepRef.current?.()
       setBeepCount(prev => prev + 1)
       setIsTiming(true)
       startTimeRef.current = Date.now()
       setElapsedTime(0)
+      setLastElapsedTime(null)
+      setParTimeRemaining(parTimeEnabled ? parTime : null)
+      parTimeFiredRef.current = false
     }
   })
 
-  // 计时器更新
+  // 单一 rAF 循环同时更新普通计时和 Par Time，避免每次渲染重启多个循环。
   useEffect(() => {
-    if (isTiming) {
-      timerRef.current = requestAnimationFrame(() => {
-        setElapsedTime(Date.now() - startTimeRef.current)
-      })
-    }
+    if (!isTiming) return undefined
 
-    return () => {
-      if (timerRef.current) {
-        cancelAnimationFrame(timerRef.current)
-      }
-    }
-  }, [isTiming, elapsedTime])
+    let frameId = null
 
-  // Par Time 计时器逻辑
-  useEffect(() => {
-    if (parTimeEnabled && parTime && isTiming) {
-      const duration = parTime
-      parTimeStartTimeRef.current = Date.now()
-      setParTimeRemaining(parTime)
+    const tick = () => {
+      const now = Date.now()
+      const elapsed = now - startTimeRef.current
+      setElapsedTime(elapsed)
 
-      const updateParTimeCountdown = () => {
-        const elapsed = Date.now() - parTimeStartTimeRef.current
-        const remaining = Math.max(0, Math.floor(duration - elapsed))
+      if (parTimeEnabled && parTime > 0) {
+        const remaining = Math.max(0, parTime - elapsed)
         setParTimeRemaining(remaining)
 
-        if (elapsed >= duration) {
-          // 到达 par time，停止计时并发出提示音
-          setParTimeRemaining(null)
-          if (beepEnabled) {
-            playBeep()
-          }
-          // 保存当前计时结果并停止
-          const finalTime = Date.now() - startTimeRef.current
-          const now = new Date()
-          const timeStr = now.toLocaleTimeString()
+        if (remaining <= 0 && !parTimeFiredRef.current) {
+          parTimeFiredRef.current = true
+          playBeepRef.current?.()
 
           setHistory(prev => [{
-            time: timeStr,
+            time: new Date().toLocaleTimeString(),
             delay: delayMs / 1000,
-            elapsed: finalTime,
+            elapsed,
             id: Date.now(),
             timeout: true
           }, ...prev.slice(0, 19)])
 
-          setLastElapsedTime(finalTime)
+          setLastElapsedTime(elapsed)
           setIsTiming(false)
           setElapsedTime(0)
-        } else if (isTiming) {
-          parTimeTimerRef.current = requestAnimationFrame(updateParTimeCountdown)
+          setParTimeRemaining(null)
+          return
         }
+      } else {
+        setParTimeRemaining(null)
       }
 
-      updateParTimeCountdown()
-
-      return () => {
-        if (parTimeTimerRef.current) {
-          cancelAnimationFrame(parTimeTimerRef.current)
-        }
-      }
-    } else if (!isTiming) {
-      setParTimeRemaining(null)
+      frameId = requestAnimationFrame(tick)
     }
-  }, [parTimeEnabled, parTime, isTiming, beepEnabled, playBeep, delayMs])
 
-  // 处理开始
+    tick()
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId)
+    }
+  }, [isTiming, parTimeEnabled, parTime, delayMs])
+
   const handleStart = useCallback(() => {
     if (minDelay >= maxDelay) {
       alert('最小延迟必须小于最大延迟')
       return
     }
-    // 开始时清除上次的计时结果
-    setLastElapsedTime(null)
-    startDelay()
-  }, [minDelay, maxDelay, startDelay])
 
-  // 处理取消（等待阶段）
+    setLastElapsedTime(null)
+    setParTimeRemaining(parTimeEnabled ? parTime : null)
+    parTimeFiredRef.current = false
+    startDelay()
+  }, [minDelay, maxDelay, parTimeEnabled, parTime, startDelay])
+
   const handleCancel = useCallback(() => {
     cancelDelay()
+    setParTimeRemaining(null)
   }, [cancelDelay])
 
-  // 处理停止（计时阶段）
   const handleStop = useCallback(() => {
-    const finalTime = elapsedTime
-    const now = new Date()
-    const timeStr = now.toLocaleTimeString()
+    const finalTime = Math.max(0, Date.now() - startTimeRef.current)
 
-    // 添加到历史记录
     setHistory(prev => [{
-      time: timeStr,
+      time: new Date().toLocaleTimeString(),
       delay: delayMs / 1000,
       elapsed: finalTime,
       id: Date.now()
@@ -160,11 +128,9 @@ function RandomDelayBeep() {
     setLastElapsedTime(finalTime)
     setIsTiming(false)
     setElapsedTime(0)
-
-    if (timerRef.current) {
-      cancelAnimationFrame(timerRef.current)
-    }
-  }, [elapsedTime, delayMs])
+    setParTimeRemaining(null)
+    parTimeFiredRef.current = false
+  }, [delayMs])
 
   return (
     <div className="random-delay-beep-page">
@@ -309,7 +275,7 @@ function RandomDelayBeep() {
               max="60000"
               step="100"
               value={parTime}
-              onChange={(e) => setParTime(Math.max(100, Math.min(60000, parseInt(e.target.value) || parTime)))}
+              onChange={(e) => setParTime(Math.max(100, Math.min(60000, parseInt(e.target.value, 10) || parTime)))}
               disabled={isWaiting || isTiming || !parTimeEnabled}
             />
           </div>

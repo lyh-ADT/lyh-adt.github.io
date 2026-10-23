@@ -99,7 +99,7 @@ export function SettingRow({ label, children }) {
 /**
  * 数字输入设置
  */
-export function NumberSetting({ value, onChange, min, max, unit, isInteger, disabled }) {
+export function NumberSetting({ value, onChange, min = 0, max = Infinity, unit, isInteger, disabled }) {
   return (
     <>
       <input
@@ -107,15 +107,13 @@ export function NumberSetting({ value, onChange, min, max, unit, isInteger, disa
         className="setting-input"
         value={value}
         onChange={(e) => {
-          const val = parseFloat(e.target.value) || value
-          const clamped = Math.max(0, val)
-          if (isInteger) {
-            onChange(Math.floor(clamped))
-          } else {
-            onChange(clamped)
-          }
+          const parsed = Number(e.target.value)
+          if (!Number.isFinite(parsed)) return
+          const clamped = Math.min(max, Math.max(min, parsed))
+          onChange(isInteger ? Math.floor(clamped) : clamped)
         }}
-        min={0}
+        min={min}
+        max={Number.isFinite(max) ? max : undefined}
         step={isInteger ? "1" : "0.1"}
         disabled={disabled}
       />
@@ -193,6 +191,7 @@ export function SettingsCard({
             value={minDelay}
             onChange={setMinDelay}
             min={0.1}
+            max={60}
           />
         </SettingRow>
 
@@ -201,6 +200,7 @@ export function SettingsCard({
             value={maxDelay}
             onChange={setMaxDelay}
             min={0.1}
+            max={60}
           />
         </SettingRow>
 
@@ -242,6 +242,8 @@ export function SettingsCard({
           <NumberSetting
             value={autoRestartLimit}
             onChange={setAutoRestartLimit}
+            min={1}
+            max={100}
             isInteger={true}
             unit="发"
             disabled={!autoRestartEnabled}
@@ -260,6 +262,8 @@ export function SettingsCard({
           <NumberSetting
             value={parTime}
             onChange={setParTime}
+            min={100}
+            max={60000}
             isInteger={true}
             unit="ms"
             disabled={!parTimeEnabled}

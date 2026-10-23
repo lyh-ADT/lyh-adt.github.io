@@ -32,6 +32,16 @@ export function useRandomDelay(options = {}) {
 
   // 开始随机延迟
   const startDelay = useCallback(() => {
+    // 防止重复点击导致多个定时器同时存在
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+
     const delay = generateRandomDelay()
     const delayInSeconds = delay / 1000
 
@@ -128,6 +138,16 @@ export function useRandomDelayAction(action, options = {}) {
 
   // 开始随机延迟
   const startDelay = useCallback(() => {
+    // 防止重复点击导致多个定时器同时存在
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+
     const delay = generateRandomDelay()
     const delayInSeconds = delay / 1000
 

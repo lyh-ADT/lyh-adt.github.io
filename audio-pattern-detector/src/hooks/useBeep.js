@@ -1,12 +1,12 @@
 /**
- * 蜂鸣器 Hook / 提示音工具
+ * 提示音 Hook / 播放工具
  *
  * 所有提示音共用一个 AudioContext，避免每次 beep 都新建上下文导致浏览器
- * 触达同时存在的 AudioContext 上限。提示音默认很短，降低被麦克风拾取后
- * 再次触发枪声检测的概率。
+ * 触达同时存在的 AudioContext 上限。不同场景使用 audioCues.js 中定义的不同音色。
  */
 
 import { useCallback } from 'react'
+import { getCue } from '../utils/audioCues'
 
 let sharedContext = null
 
@@ -28,45 +28,32 @@ function getSharedContext() {
   return sharedContext
 }
 
-/**
- * 直接播放一个提示音。可以在非 Hook 环境（例如自定义模式节点）调用。
- * @param {Object} options
- * @param {number} options.frequency 频率（Hz）
- * @param {number} options.duration 时长（毫秒）
- * @param {number} options.volume 音量 0-1
- * @param {OscillatorType} options.type 波形
- */
-export function playTone({
-  frequency = 1000,
-  duration = 80,
-  volume = 0.4,
-  type = 'square'
-} = {}) {
-  const context = getSharedContext()
-  if (!context) return
-
-  const safeVolume = Math.max(0, Math.min(1, Number(volume) || 0))
+function scheduleTone(context, tone, offsetSeconds) {
+  const safeVolume = Math.max(0, Math.min(1, Number(tone.volume) || 0))
   if (safeVolume <= 0) return
 
   try {
     const oscillator = context.createOscillator()
     const gainNode = context.createGain()
-    const now = context.currentTime
-    const durationSeconds = Math.max(0.01, (Number(duration) || 80) / 1000)
+    const startAt = context.currentTime + Math.max(0, offsetSeconds)
+    const durationSeconds = Math.max(0.01, (Number(tone.duration) || 80) / 1000)
 
-    oscillator.type = type
-    oscillator.frequency.setValueAtTime(Math.max(20, Number(frequency) || 1000), now)
+    oscillator.type = tone.type || 'square'
+    oscillator.frequency.setValueAtTime(
+      Math.max(20, Number(tone.frequency) || 1000),
+      startAt
+    )
 
-    gainNode.gain.setValueAtTime(safeVolume, now)
+    gainNode.gain.setValueAtTime(safeVolume, startAt)
     gainNode.gain.exponentialRampToValueAtTime(
       Math.max(0.0001, safeVolume * 0.05),
-      now + durationSeconds
+      startAt + durationSeconds
     )
 
     oscillator.connect(gainNode)
     gainNode.connect(context.destination)
-    oscillator.start(now)
-    oscillator.stop(now + durationSeconds + 0.02)
+    oscillator.start(startAt)
+    oscillator.stop(startAt + durationSeconds + 0.02)
 
     oscillator.onended = () => {
       try {
@@ -82,37 +69,48 @@ export function playTone({
 }
 
 /**
- * 使用蜂鸣器提示音。
- * @param {boolean} enabled 是否启用
- * @param {Object} options 频率 / 时长 / 音量 / 波形
- * @returns {Function} 播放函数
+ * 直接播放一个自定义音调。可以在非 Hook 环境（例如自定义模式节点）调用。
  */
-export function useBeep(enabled = true, options = {}) {
-  const {
-    frequency = 1000,
-    duration = 80,
-    volume = 0.4,
-    type = 'square'
-  } = options
+export function playTone({
+  frequency = 1000,
+  duration = 80,
+  volume = 0.4,
+  type = 'square'
+} = {}) {
+  const context = getSharedContext()
+  if (!context) return
 
-  return useCallback(() => {
-    if (!enabled) return
-    playTone({ frequency, duration, volume, type })
-  }, [enabled, frequency, duration, volume, type])
+  scheduleTone(context, { frequency, duration, volume, type }, 0)
 }
 
 /**
- * 使用蜂鸣器提示音（带回调）。
+ * 播放预定义的场景提示音。
+ * @param {'standby'|'start'|'parTime'|'shot'} name
  */
-export function useBeepWithCallback(enabled = true, onBeep = null, options = {}) {
-  const playBeep = useBeep(enabled, options)
+export function playCue(name) {
+  const cue = getCue(name)
+  if (!cue) return
 
-  return useCallback(() => {
-    playBeep()
-    if (onBeep) {
-      setTimeout(onBeep, 50)
-    }
-  }, [playBeep, onBeep])
+  const context = getSharedContext()
+  if (!context) return
+
+  let offset = 0
+  for (const tone of cue.tones) {
+    scheduleTone(context, tone, offset)
+    offset += (Math.max(1, Number(tone.duration) || 80) + Math.max(0, tone.gapAfter || 0)) / 1000
+  }
 }
 
-export default useBeep
+/**
+ * 返回一个稳定函数，用于播放指定场景提示音。
+ * @param {boolean} enabled 是否启用
+ * @param {'standby'|'start'|'parTime'|'shot'} name
+ */
+export function useCue(enabled = true, name = 'start') {
+  return useCallback(() => {
+    if (!enabled) return
+    playCue(name)
+  }, [enabled, name])
+}
+
+export default useCue

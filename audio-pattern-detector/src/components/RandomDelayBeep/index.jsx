@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useBeep } from '../../hooks/useBeep'
+import { useCue } from '../../hooks/useBeep'
 import { useRandomDelay } from '../../hooks/useRandomDelay'
 import { formatTime } from '../../utils/audioDetection'
 import './RandomDelayBeep.css'
@@ -22,13 +22,21 @@ function RandomDelayBeep() {
   const [lastElapsedTime, setLastElapsedTime] = useState(null)
 
   const startTimeRef = useRef(0)
-  const playBeepRef = useRef(null)
+  const playStartBeepRef = useRef(null)
+  const playParTimeBeepRef = useRef(null)
   const parTimeFiredRef = useRef(false)
 
-  const playBeep = useBeep(beepEnabled, { duration: 120, volume: 0.4 })
+  const playStandbyBeep = useCue(beepEnabled, 'standby')
+  const playStartBeep = useCue(beepEnabled, 'start')
+  const playParTimeBeep = useCue(beepEnabled, 'parTime')
+
   useEffect(() => {
-    playBeepRef.current = playBeep
-  }, [playBeep])
+    playStartBeepRef.current = playStartBeep
+  }, [playStartBeep])
+
+  useEffect(() => {
+    playParTimeBeepRef.current = playParTimeBeep
+  }, [playParTimeBeep])
 
   const {
     isWaiting,
@@ -40,7 +48,7 @@ function RandomDelayBeep() {
     minDelay: minDelay * 1000,
     maxDelay: maxDelay * 1000,
     onComplete: () => {
-      playBeepRef.current?.()
+      playStartBeepRef.current?.()
       setBeepCount(prev => prev + 1)
       setIsTiming(true)
       startTimeRef.current = Date.now()
@@ -68,7 +76,7 @@ function RandomDelayBeep() {
 
         if (remaining <= 0 && !parTimeFiredRef.current) {
           parTimeFiredRef.current = true
-          playBeepRef.current?.()
+          playParTimeBeepRef.current?.()
 
           setHistory(prev => [{
             time: new Date().toLocaleTimeString(),
@@ -107,8 +115,9 @@ function RandomDelayBeep() {
     setLastElapsedTime(null)
     setParTimeRemaining(parTimeEnabled ? parTime : null)
     parTimeFiredRef.current = false
+    playStandbyBeep()
     startDelay()
-  }, [minDelay, maxDelay, parTimeEnabled, parTime, startDelay])
+  }, [minDelay, maxDelay, parTimeEnabled, parTime, playStandbyBeep, startDelay])
 
   const handleCancel = useCallback(() => {
     cancelDelay()

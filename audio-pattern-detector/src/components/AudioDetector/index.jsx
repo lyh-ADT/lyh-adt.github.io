@@ -214,7 +214,7 @@ export function SettingsCard({
           />
         </SettingRow>
 
-        <SettingRow label="启动提示音">
+        <SettingRow label="计时提示音">
           <ToggleSetting
             checked={beepEnabled}
             onChecked={setBeepEnabled}

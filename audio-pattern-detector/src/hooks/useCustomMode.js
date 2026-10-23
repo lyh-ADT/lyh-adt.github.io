@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { NodeType } from '../types/index.js'
-import { useBeep, playTone } from './useBeep'
+import { useCue, playTone } from './useBeep'
 import {
   useAudioCoreState,
   useAudioCoreRefs,
@@ -103,8 +103,10 @@ export function useCustomMode(nodes = [], options = {}) {
     setCurrentShotTime
   }
 
-  const playBeep = useBeep(defaultBeepEnabled, { duration: 120, volume: 0.4 })
-  const playShotBeep = useBeep(true, { duration: 50, volume: 0.35 })
+  const playStandbyBeep = useCue(defaultBeepEnabled, 'standby')
+  const playStartBeep = useCue(defaultBeepEnabled, 'start')
+  const playParTimeBeep = useCue(defaultBeepEnabled, 'parTime')
+  const playShotBeep = useCue(true, 'shot')
 
   // 检测配置通过 ref 传递，节点开始时同步写入，避免状态更新延迟导致阈值滞后。
   const shotConfigRef = useRef({
@@ -326,6 +328,10 @@ export function useCustomMode(nodes = [], options = {}) {
     setCountdown(delay / 1000)
     setElapsedTime(0)
 
+    if (config?.beepOnStart) {
+      playStandbyBeep()
+    }
+
     const startTime = Date.now()
     const updateInterval = setInterval(() => {
       const elapsed = Date.now() - startTime
@@ -337,7 +343,7 @@ export function useCustomMode(nodes = [], options = {}) {
         clearInterval(updateInterval)
         setCountdown(0)
         if (config?.beepOnComplete) {
-          playBeep()
+          playStartBeep()
         }
         addNodeCompleteToHistory({ type: NodeType.RandomDelay }, delay)
         executeNextNodeRef.current()
@@ -345,7 +351,7 @@ export function useCustomMode(nodes = [], options = {}) {
     }, 100)
 
     timerRef.current = { type: 'randomDelay', cleanup: () => clearInterval(updateInterval) }
-  }, [addNodeCompleteToHistory, playBeep])
+  }, [addNodeCompleteToHistory, playStartBeep, playStandbyBeep])
 
   const executeFixedDelayNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.FIXED_DELAY)
@@ -425,7 +431,7 @@ export function useCustomMode(nodes = [], options = {}) {
         setParTimeRemaining(null)
 
         if (beepOnTimeout) {
-          playBeep()
+          playParTimeBeep()
         }
 
         addNodeCompleteToHistory({ type: NodeType.ParTime }, parTime)
@@ -463,7 +469,7 @@ export function useCustomMode(nodes = [], options = {}) {
         }
       }
     }
-  }, [addNodeCompleteToHistory, playBeep, stopListening])
+  }, [addNodeCompleteToHistory, playParTimeBeep, stopListening])
 
   const executeBeepNode = useCallback((config) => {
     setCurrentNodeType(CurrentNodeType.BEEP)

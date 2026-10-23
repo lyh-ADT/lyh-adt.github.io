@@ -17,7 +17,8 @@ export const defaultNodeConfigs = {
   [NodeType.RandomDelay]: {
     minDelay: 1000,          // 最小延迟（毫秒）
     maxDelay: 5000,          // 最大延迟（毫秒）
-    beepOnComplete: false    // 延迟结束后是否播放提示音
+    beepOnStart: true,       // 延迟开始（待机）时是否播放提示音
+    beepOnComplete: false    // 延迟结束（启动）时是否播放提示音
   },
   [NodeType.WaitForShot]: {
     threshold: 0.7,          // 检测阈值
@@ -80,8 +81,13 @@ export function getNodeIcon(type) {
 // 获取节点描述
 export function getNodeDescription(type, config = {}) {
   switch (type) {
-    case NodeType.RandomDelay:
-      return `${(config.minDelay / 1000).toFixed(1)}s - ${(config.maxDelay / 1000).toFixed(1)}s 随机延迟${config.beepOnComplete ? '，结束提示音' : ''}`
+    case NodeType.RandomDelay: {
+      const cues = [
+        config.beepOnStart ? '待机音' : null,
+        config.beepOnComplete ? '启动音' : null
+      ].filter(Boolean).join(' + ')
+      return `${(config.minDelay / 1000).toFixed(1)}s - ${(config.maxDelay / 1000).toFixed(1)}s 随机延迟${cues ? `，${cues}` : ''}`
+    }
     case NodeType.WaitForShot:
       return `阈值：${config.threshold}, 提示音：${config.beepEnabled ? '开' : '关'}`
     case NodeType.ParTime:

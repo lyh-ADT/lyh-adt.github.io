@@ -297,7 +297,13 @@ function NodeConfigPanel({ node, index, onUpdateConfig, onDelete, disabled }) {
               disabled={disabled}
             />
             <ToggleInput
-              label="延迟结束后播放提示音"
+              label="延迟开始时播放待机提示音"
+              checked={config.beepOnStart}
+              onChange={(v) => onUpdateConfig('beepOnStart', v)}
+              disabled={disabled}
+            />
+            <ToggleInput
+              label="延迟结束时播放启动提示音"
               checked={config.beepOnComplete}
               onChange={(v) => onUpdateConfig('beepOnComplete', v)}
               disabled={disabled}
@@ -444,8 +450,12 @@ function ToggleInput({ label, checked, onChange, disabled }) {
 
 // 预设模式
 function getShotTimerPreset() {
+  const delayNode = createNode(NodeType.RandomDelay)
+  delayNode.config.beepOnStart = true
+  delayNode.config.beepOnComplete = true
+
   return [
-    createNode(NodeType.RandomDelay),
+    delayNode,
     createNode(NodeType.WaitForShot),
     createNode(NodeType.AutoRestart)
   ]
@@ -458,8 +468,12 @@ function getRandomBeepPreset() {
 }
 
 function getAdvancedPreset() {
+  const delayNode = createNode(NodeType.RandomDelay)
+  delayNode.config.beepOnStart = true
+  delayNode.config.beepOnComplete = true
+
   return [
-    createNode(NodeType.RandomDelay),
+    delayNode,
     createNode(NodeType.Beep),
     createNode(NodeType.WaitForShot),
     createNode(NodeType.ParTime),

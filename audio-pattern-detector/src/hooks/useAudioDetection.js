@@ -13,7 +13,7 @@ import {
   useStatusInfo,
   useCleanup
 } from './useAudioCore'
-import { useBeep } from './useBeep'
+import { useCue } from './useBeep'
 import { useRandomDelayAction } from './useRandomDelay'
 
 export { AppState }
@@ -48,13 +48,26 @@ export function useAudioDetection(initialConfig = {}) {
   const shotCountRef = useRef(0)
   const refs = { ...coreRefs, shotCountRef }
 
-  const playStartBeep = useBeep(config.beepEnabled, { duration: 120, volume: 0.4 })
-  const playShotBeep = useBeep(true, { duration: 50, volume: 0.35 })
+  const playStandbyBeep = useCue(config.beepEnabled, 'standby')
+  const playStartBeep = useCue(config.beepEnabled, 'start')
+  const playParTimeBeep = useCue(config.beepEnabled, 'parTime')
+  const playShotBeep = useCue(true, 'shot')
 
+  const playStandbyBeepRef = useRef(playStandbyBeep)
   const playStartBeepRef = useRef(playStartBeep)
+  const playParTimeBeepRef = useRef(playParTimeBeep)
+
+  useEffect(() => {
+    playStandbyBeepRef.current = playStandbyBeep
+  }, [playStandbyBeep])
+
   useEffect(() => {
     playStartBeepRef.current = playStartBeep
   }, [playStartBeep])
+
+  useEffect(() => {
+    playParTimeBeepRef.current = playParTimeBeep
+  }, [playParTimeBeep])
 
   // 检测配置放在 ref 中，修改设置后无需重新启动监听即可生效。
   const shotConfigRef = useRef({})
@@ -109,6 +122,12 @@ export function useAudioDetection(initialConfig = {}) {
   startRandomDelayRef.current = startRandomDelayInternal
   cancelDelayRef.current = cancelDelayInternal
 
+  // 待机提示音在随机等待开始时播放；start 提示音在延迟结束时播放。
+  const beginStandby = useCallback(() => {
+    playStandbyBeepRef.current?.()
+    startRandomDelayRef.current?.()
+  }, [])
+
   // 计时状态
   const [elapsedTime, setElapsedTime] = useState(0)
   const [parTimeRemaining, setParTimeRemaining] = useState(null)
@@ -161,7 +180,7 @@ export function useAudioDetection(initialConfig = {}) {
           setParTimeRemaining(null)
 
           if (config.beepEnabled) {
-            playStartBeepRef.current?.()
+            playParTimeBeepRef.current?.()
           }
 
           const finalTime = now - sessionStartTimeRef.current
@@ -183,7 +202,7 @@ export function useAudioDetection(initialConfig = {}) {
             }
             restartTimerRef.current = setTimeout(() => {
               restartTimerRef.current = null
-              startRandomDelayRef.current?.()
+              beginStandby()
             }, AUTO_RESTART_DELAY_MS)
           } else {
             stopListening()
@@ -215,7 +234,8 @@ export function useAudioDetection(initialConfig = {}) {
     config.parTime,
     config.autoRestartEnabled,
     config.beepEnabled,
-    stopListening
+    stopListening,
+    beginStandby
   ])
 
   // 按射击发数自动重启
@@ -254,7 +274,7 @@ export function useAudioDetection(initialConfig = {}) {
     restartTimerRef.current = setTimeout(() => {
       restartTimerRef.current = null
       autoRestartCheckedRef.current = false
-      startRandomDelayRef.current?.()
+      beginStandby()
     }, AUTO_RESTART_DELAY_MS)
   }, [
     audioState.shotCount,
@@ -263,7 +283,8 @@ export function useAudioDetection(initialConfig = {}) {
     audioState.setCurrentShotTime,
     config.autoRestartEnabled,
     config.autoRestartLimit,
-    stopListening
+    stopListening,
+    beginStandby
   ])
 
   const startListeningWithTimer = useCallback(() => {
@@ -310,7 +331,7 @@ export function useAudioDetection(initialConfig = {}) {
     setParTimeRemaining(config.parTimeEnabled ? config.parTime : null)
     setIsInfiniteLoop(false)
 
-    startRandomDelayRef.current?.()
+    beginStandby()
   }, [
     audioState.setError,
     audioState.setShotCount,
@@ -318,7 +339,8 @@ export function useAudioDetection(initialConfig = {}) {
     audioState.setCurrentShotTime,
     config.parTimeEnabled,
     config.parTime,
-    stopListening
+    stopListening,
+    beginStandby
   ])
 
   const handleToggleListening = useCallback(() => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftIcon,
   CalendarIcon,
@@ -10,7 +10,10 @@ import {
   TrashIcon,
 } from './Icons'
 import { formatDue, isOverdue, priorityLabel } from '../lib/todoFile'
+import { foldStorageKey } from '../lib/markdownOutline'
 import MarkdownPreview from './MarkdownPreview'
+
+const MarkdownCodeEditor = lazy(() => import('./MarkdownCodeEditor'))
 
 function SaveStatus({ status }) {
   if (status.state === 'saving') {
@@ -39,6 +42,7 @@ function SaveStatus({ status }) {
 
 export default function TodoEditor({
   todo,
+  folderName,
   categories,
   saveStatus,
   isDirty,
@@ -50,8 +54,13 @@ export default function TodoEditor({
   onSave,
 }) {
   const [mode, setMode] = useState('edit')
+  const editorRef = useRef(null)
   const overdue = isOverdue(todo.due, todo.done)
   const detailsLength = useMemo(() => Array.from(todo.details || '').length, [todo.details])
+  const foldKey = useMemo(
+    () => foldStorageKey(folderName, todo.category, todo.fileName),
+    [folderName, todo.category, todo.fileName]
+  )
 
   const handleTitleBlur = () => {
     if (!todo.title.trim()) onUpdate({ title: '未命名待办' })
@@ -177,28 +186,57 @@ export default function TodoEditor({
         </div>
 
         <div className="detail-head">
-          <div className="detail-tabs" role="tablist" aria-label="详情视图">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'edit'}
-              className={mode === 'edit' ? 'is-active' : ''}
-              onClick={() => setMode('edit')}
-            >
-              <PencilIcon size={14} />
-              编辑
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === 'preview'}
-              className={mode === 'preview' ? 'is-active' : ''}
-              onClick={() => setMode('preview')}
-            >
-              <EyeIcon size={14} />
-              预览
-            </button>
+          <div className="detail-head-left">
+            <div className="detail-tabs" role="tablist" aria-label="详情视图">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'edit'}
+                className={mode === 'edit' ? 'is-active' : ''}
+                onClick={() => setMode('edit')}
+              >
+                <PencilIcon size={14} />
+                编辑
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'preview'}
+                className={mode === 'preview' ? 'is-active' : ''}
+                onClick={() => setMode('preview')}
+              >
+                <EyeIcon size={14} />
+                预览
+              </button>
+            </div>
+
+            {mode === 'edit' ? (
+              <div className="fold-tools" aria-label="块折叠">
+                <button
+                  type="button"
+                  onClick={() => editorRef.current?.foldAll()}
+                  title="折叠所有有子内容的块"
+                >
+                  全部折叠
+                </button>
+                <button
+                  type="button"
+                  onClick={() => editorRef.current?.unfoldAll()}
+                  title="展开所有折叠块"
+                >
+                  全部展开
+                </button>
+                <button
+                  type="button"
+                  onClick={() => editorRef.current?.foldToLevel(2)}
+                  title="折叠二级及以下标题的内容"
+                >
+                  到 H2
+                </button>
+              </div>
+            ) : null}
           </div>
+
           <span className="detail-count">
             {todo.due ? `截止 ${formatDue(todo.due)} · ` : ''}
             {detailsLength} 字
@@ -207,16 +245,23 @@ export default function TodoEditor({
 
         <div className={`detail-body detail-${mode}`}>
           {mode === 'edit' ? (
-            <textarea
-              className="detail-textarea"
-              value={todo.details}
-              onChange={(event) => onUpdate({ details: event.target.value })}
-              placeholder="写下这件事的背景、下一步、链接，或者任何想记下的细节…"
-              aria-label="待办详情"
-              spellCheck="false"
-            />
+            <Suspense
+              fallback={
+                <div className="editor-loading">
+                  <span className="mini-spinner" />
+                  正在载入编辑器…
+                </div>
+              }
+            >
+              <MarkdownCodeEditor
+                ref={editorRef}
+                value={todo.details}
+                onChange={(details) => onUpdate({ details })}
+                storageKey={foldKey}
+              />
+            </Suspense>
           ) : (
-            <MarkdownPreview text={todo.details} />
+            <MarkdownPreview text={todo.details} foldKey={foldKey} />
           )}
         </div>
 

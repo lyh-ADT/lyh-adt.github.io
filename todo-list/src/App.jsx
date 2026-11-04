@@ -561,6 +561,7 @@ export default function App() {
           <TodoEditor
             key={selectedTodo.id}
             todo={selectedTodo}
+            folderName={folderName}
             categories={categories}
             saveStatus={saveStatus}
             isDirty={isDirty}
